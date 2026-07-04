@@ -1,0 +1,10 @@
+.git
+.env
+.env.local
+node_modules
+frontend/dist
+frontend/node_modules
+data
+.DS_Store
+.idea
+.vscode

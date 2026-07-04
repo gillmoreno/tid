@@ -1,0 +1,18 @@
+name: tid-dev
+
+services:
+  go-slice:
+    container_name: tid-go-slice-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.go-slice
+    restart: unless-stopped
+    ports:
+      - "8016:8080"
+    environment:
+      - GO_API_PORT=8080
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:5180}
+      - SITE_NAME=${SITE_NAME:-The Idea Guy}
+      - SITE_TAGLINE=${SITE_TAGLINE:-Testing what's real in AI — one person, real loops, no hype.}
+    volumes:
+      - ./data:/data

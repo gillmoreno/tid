@@ -1,0 +1,47 @@
+#
+# TID unified deployment image
+# - Static frontend (Vite build) served by nginx
+# - Go API runs internally on :8080
+# - nginx on :80 proxies /api/* and /health to the Go API
+# - supervisor manages go-slice + nginx
+#
+
+FROM node:20-alpine AS frontend-build
+WORKDIR /app/frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+
+ENV VITE_API_URL=/api
+
+RUN npm run build
+
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS go-build
+WORKDIR /src/go-backend
+
+ARG TARGETOS=linux
+ARG TARGETARCH
+
+COPY go-backend/go.mod go-backend/go.sum ./
+RUN go mod download
+
+COPY go-backend/ ./
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-amd64} go build -o /out/go-slice ./cmd/server
+
+FROM nginx:1.27-alpine
+
+RUN apk add --no-cache ca-certificates supervisor tzdata \
+    && rm -f /etc/nginx/conf.d/default.conf
+
+COPY --from=frontend-build /app/frontend/dist/ /usr/share/nginx/html/
+COPY --from=go-build /out/go-slice /usr/local/bin/go-slice
+
+COPY nginx.deploy.conf /etc/nginx/conf.d/default.conf
+COPY supervisord.deploy.conf /etc/supervisord.conf
+
+RUN mkdir -p /data /run/nginx
+
+EXPOSE 80
+CMD ["supervisord", "-c", "/etc/supervisord.conf"]
