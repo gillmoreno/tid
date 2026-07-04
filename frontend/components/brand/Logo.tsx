@@ -6,10 +6,10 @@ type LogoProps = {
 };
 
 const sizeMap = {
-  sm: "h-8 w-8",
-  md: "h-10 w-10",
-  lg: "h-14 w-14",
-  hero: "h-28 w-28 md:h-36 md:w-36",
+  sm: "h-8 w-auto max-w-[4.5rem]",
+  md: "h-10 w-auto max-w-[5.5rem]",
+  lg: "h-14 w-auto max-w-[8rem]",
+  hero: "h-28 w-auto max-w-[18rem] md:h-36 md:max-w-[22rem]",
 };
 
 export function Logo({ className, size = "md" }: LogoProps) {
