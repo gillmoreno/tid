@@ -1,8 +1,23 @@
-# Clip → Post
+# Clip → Post / Post Factory
 
 Semi-automated pipeline for Podcast Alpha-style native X video posts from AI/tech YouTube clips.
 
+**Post Factory** (primary): YouTube URL + biases + prompt → 2–5 clip candidates in SQLite → edit/schedule in http://localhost:5180/factory (local only).
+
 **Philosophy:** composable pieces, no monolith. Change taste rules without touching prepare-post. Change prepare steps without touching copy generation.
+
+## Post Factory (agent / automation entry)
+
+From repo root:
+
+```bash
+just dev   # Go API + SQLite + /factory UI
+just factory-run --url "https://youtube.com/watch?v=..." --podcast "Podcast Alpha"
+```
+
+Or: `./loops/clip-to-post/run-factory.sh --url URL [--title] [--podcast]`
+
+Agents: see `AGENTS.md` in this folder and `../../AGENTS.md`.
 
 ## Architecture
 
@@ -123,10 +138,10 @@ brew install yt-dlp ffmpeg jq
 - [x] Phase 0: Manual pipeline proven (Naval Taiwan clip)
 - [x] Phase 1: Core scripts (`clip`, `transcript`, `draft-copy`, `draft`)
 - [x] Semi-automated prepare flow (`prepare-post.sh`)
+- [x] Post Factory: SQLite + Go API + `/factory` UI + `run-factory.sh` + `just factory`
 - [ ] Phase 2: LLM-assisted copy via `taste.md` prompt in `draft-copy.sh`
-- [ ] Phase 3: Go API draft queue in TID backend (optional)
 - [ ] Phase 4: X API posting (`post.sh`, approve-gated)
-- [ ] Phase 5: Scheduled / agent-driven loop
+- [ ] Phase 5: Cron / launchd for `factory-tick`
 
 ## For AI agents
 

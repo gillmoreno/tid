@@ -1,6 +1,7 @@
 # Environment
 .env
 .env.local
+frontend/.env.development.local
 deploy/.env
 
 # IDE
@@ -16,6 +17,7 @@ node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
 go-backend/server
+go-backend/factory
 
 # Runtime data
 data/

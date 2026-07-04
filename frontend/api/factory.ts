@@ -1,0 +1,85 @@
+import { apiClient } from "@/api/client";
+import type {
+  AnalyzeResult,
+  BiasProfile,
+  Candidate,
+  PromptTemplate,
+  ScheduledPost,
+  SchedulerTickResult,
+  Source,
+} from "@/types/factory";
+
+export async function fetchBiases(): Promise<BiasProfile> {
+  const { data } = await apiClient.get<BiasProfile>("/factory/biases");
+  return data;
+}
+
+export async function updateBiases(content: string): Promise<BiasProfile> {
+  const { data } = await apiClient.put<BiasProfile>("/factory/biases", { content });
+  return data;
+}
+
+export async function fetchPrompt(): Promise<PromptTemplate> {
+  const { data } = await apiClient.get<PromptTemplate>("/factory/prompt");
+  return data;
+}
+
+export async function updatePrompt(content: string): Promise<PromptTemplate> {
+  const { data } = await apiClient.put<PromptTemplate>("/factory/prompt", { content });
+  return data;
+}
+
+export async function fetchSources(): Promise<Source[]> {
+  const { data } = await apiClient.get<Source[]>("/factory/sources");
+  return data;
+}
+
+export async function createSource(input: {
+  youtube_url: string;
+  title?: string;
+  podcast?: string;
+}): Promise<Source> {
+  const { data } = await apiClient.post<Source>("/factory/sources", input);
+  return data;
+}
+
+export async function analyzeSource(sourceId: string): Promise<AnalyzeResult> {
+  const { data } = await apiClient.post<AnalyzeResult>(`/factory/sources/${sourceId}/analyze`);
+  return data;
+}
+
+export async function fetchCandidates(sourceId?: string): Promise<Candidate[]> {
+  const params = sourceId ? { source_id: sourceId } : undefined;
+  const { data } = await apiClient.get<Candidate[]>("/factory/candidates", { params });
+  return data;
+}
+
+export async function updateCandidate(
+  id: string,
+  patch: Partial<Pick<Candidate, "hook" | "take" | "post_text" | "status">>
+): Promise<Candidate> {
+  const { data } = await apiClient.patch<Candidate>(`/factory/candidates/${id}`, patch);
+  return data;
+}
+
+export async function clipCandidate(id: string): Promise<Candidate> {
+  const { data } = await apiClient.post<Candidate>(`/factory/candidates/${id}/clip`);
+  return data;
+}
+
+export async function scheduleCandidate(id: string, scheduledAt: string): Promise<ScheduledPost> {
+  const { data } = await apiClient.post<ScheduledPost>(`/factory/candidates/${id}/schedule`, {
+    scheduled_at: scheduledAt,
+  });
+  return data;
+}
+
+export async function fetchScheduled(): Promise<ScheduledPost[]> {
+  const { data } = await apiClient.get<ScheduledPost[]>("/factory/scheduled");
+  return data;
+}
+
+export async function tickScheduler(): Promise<SchedulerTickResult> {
+  const { data } = await apiClient.post<SchedulerTickResult>("/factory/scheduler/tick");
+  return data;
+}

@@ -19,7 +19,11 @@ func main() {
 	cfg := config.Load()
 	logger := log.New(os.Stdout, "tid-api ", log.LstdFlags|log.LUTC)
 
-	app := api.NewApp(cfg, logger)
+	app, err := api.NewApp(cfg, logger)
+	if err != nil {
+		logger.Fatalf("init app: %v", err)
+	}
+	defer func() { _ = app.Close() }()
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	server := &http.Server{
@@ -28,7 +32,7 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	logger.Printf("starting TID API on %s", addr)
+	logger.Printf("starting TID API on %s (db: %s)", addr, cfg.DatabasePath)
 	errCh := make(chan error, 1)
 	go func() {
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

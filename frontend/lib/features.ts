@@ -1,0 +1,1 @@
+export const factoryEnabled = import.meta.env.VITE_FACTORY_ENABLED === "true";

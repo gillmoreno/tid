@@ -8,15 +8,37 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"tid/go-backend/internal/config"
+	"tid/go-backend/internal/db"
+	"tid/go-backend/internal/factory"
 )
 
 type App struct {
-	cfg    config.Config
-	logger *log.Logger
+	cfg     config.Config
+	logger  *log.Logger
+	factory *factory.Store
+	runner  factory.Runner
 }
 
-func NewApp(cfg config.Config, logger *log.Logger) *App {
-	return &App{cfg: cfg, logger: logger}
+func NewApp(cfg config.Config, logger *log.Logger) (*App, error) {
+	provider, err := db.NewProvider(cfg.DatabasePath)
+	if err != nil {
+		return nil, err
+	}
+	store := factory.NewStore(provider)
+	if err := seedFactoryStore(store, cfg.RepoRoot); err != nil {
+		logger.Printf("factory seed warning: %v", err)
+	}
+	app := &App{
+		cfg:     cfg,
+		logger:  logger,
+		factory: store,
+		runner:  factory.NewRunner(cfg.RepoRoot),
+	}
+	return app, nil
+}
+
+func (a *App) Close() error {
+	return nil
 }
 
 func (a *App) Router() http.Handler {
@@ -34,6 +56,7 @@ func (a *App) Router() http.Handler {
 		api.Get("/sections", a.handleSections)
 		api.Get("/sections/{slug}", a.handleSection)
 		api.Get("/items/{slug}", a.handleItem)
+		a.mountFactoryRoutes(api)
 	})
 
 	return r

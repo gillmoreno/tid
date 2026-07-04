@@ -1,11 +1,13 @@
 import { Link, NavLink } from "react-router-dom";
 import { Logo } from "@/components/brand/Logo";
+import { factoryEnabled } from "@/lib/features";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/sections/ai-guild", label: "AI Guild" },
   { to: "/sections/loops-with-taste", label: "Loops" },
   { to: "/sections/software-ideas", label: "Software" },
+  ...(factoryEnabled ? [{ to: "/factory", label: "Factory" }] : []),
 ];
 
 export function Header() {
