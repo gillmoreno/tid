@@ -1,0 +1,12 @@
+{
+  "apex_domain": "the-idea-guy.com",
+  "project_name": "tid",
+  "subdomain": "",
+  "build_dir": "frontend",
+  "output_dir": "frontend/dist",
+  "build_command": "npm ci && npm run build",
+  "build_env": {
+    "VITE_API_URL": "/api",
+    "VITE_STATIC_CONTENT": "true"
+  }
+}

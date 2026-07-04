@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { Hero } from "@/components/sections/Hero";
 import { SectionCard } from "@/components/sections/SectionCard";
 import { IdeaCard } from "@/components/sections/IdeaCard";
-import { fetchSections, fetchSite } from "@/api/site";
+import { fetchFeaturedItems, fetchSections, fetchSite } from "@/api/site";
 import type { Item, Section, Site } from "@/types/site";
-import { apiClient } from "@/api/client";
 
 export function HomePage() {
   const [site, setSite] = useState<Site | null>(null);
@@ -19,11 +18,7 @@ export function HomePage() {
         setSite(siteData);
         setSections(sectionsData);
 
-        const sectionDetails = await Promise.all(
-          sectionsData.map((s) => apiClient.get<{ items: Item[] }>(`/sections/${s.slug}`))
-        );
-        const allItems = sectionDetails.flatMap((r) => r.data.items);
-        setFeatured(allItems.filter((i) => i.featured));
+        setFeatured(await fetchFeaturedItems());
       } catch {
         setError("Could not reach the API. Start the backend with `just dev`.");
       }

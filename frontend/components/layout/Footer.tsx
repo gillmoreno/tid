@@ -7,7 +7,7 @@ export function Footer() {
           <span className="mx-2 text-line">·</span>
           Testing what&apos;s real in AI
         </p>
-        <p className="font-mono text-xs text-fog/70">theideaguy.com</p>
+        <p className="font-mono text-xs text-fog/70">the-idea-guy.com</p>
       </div>
     </footer>
   );

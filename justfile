@@ -19,3 +19,6 @@ dev-down:
 dev-local:
     @echo "Terminal 1: cd go-backend && go run ./cmd/server"
     @echo "Terminal 2: cd frontend && VITE_API_URL=/api VITE_API_PROXY_TARGET=http://localhost:8080 npm run dev"
+
+deploy-cloudflare *args:
+    bash scripts/deploy-cloudflare.sh {{args}}
