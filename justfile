@@ -22,3 +22,7 @@ dev-local:
 
 deploy-cloudflare *args:
     bash scripts/deploy-cloudflare.sh {{args}}
+
+# Clip → Post loop (semi-automated X posting prep)
+prepare-post draft:
+    bash loops/clip-to-post/prepare-post.sh --draft {{draft}}

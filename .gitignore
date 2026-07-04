@@ -19,6 +19,9 @@ go-backend/server
 
 # Runtime data
 data/
+loops/clip-to-post/drafts/
+loops/clip-to-post/.env
+loops/clip-to-post/config.local.env
 
 # OS
 .DS_Store
