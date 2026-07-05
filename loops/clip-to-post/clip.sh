@@ -31,13 +31,26 @@ fi
 ID="${DRAFT_ID:-$(default_draft_id "$URL" "${SLUG:-}")}"
 mkdir -p "$OUT_DIR/$ID"
 
-echo "Getting stream URL..."
-STREAM="$(yt-dlp -g -f "bv*+ba/b" "$URL" | head -1)"
+echo "Getting stream URLs..."
+VIDEO_URL="$(yt-dlp -g -f "bv" "$URL")"
+AUDIO_URL="$(yt-dlp -g -f "ba" "$URL")"
 
+CLIP_OUT="$OUT_DIR/$ID/clip.mp4"
 echo "Extracting clip $START → $END..."
-ffmpeg -ss "$START" -to "$END" -i "$STREAM" \
-  -c:v libx264 -c:a aac -movflags +faststart \
-  "$OUT_DIR/$ID/clip.mp4" -y
 
-echo "Clip saved: $OUT_DIR/$ID/clip.mp4"
+if [[ -n "$AUDIO_URL" ]]; then
+  # YouTube serves separate video + audio streams; mux both or clip is silent.
+  ffmpeg -ss "$START" -to "$END" -i "$VIDEO_URL" \
+    -ss "$START" -to "$END" -i "$AUDIO_URL" \
+    -map 0:v:0 -map 1:a:0 -shortest \
+    -c:v libx264 -c:a aac -b:a 192k -movflags +faststart \
+    "$CLIP_OUT" -y
+else
+  # Fallback for muxed sources (single stream with audio baked in).
+  ffmpeg -ss "$START" -to "$END" -i "$VIDEO_URL" \
+    -c:v libx264 -c:a aac -movflags +faststart \
+    "$CLIP_OUT" -y
+fi
+
+echo "Clip saved: $CLIP_OUT"
 echo "$ID"

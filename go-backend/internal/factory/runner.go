@@ -85,35 +85,33 @@ func (r Runner) Analyze(sourceID string, bias, prompt string) (AnalysisResult, e
 	return AnalysisResult{}, fmt.Errorf("could not parse analysis output")
 }
 
-func (r Runner) ClipCandidate(source Source, c Candidate) (string, error) {
-	speaker := source.Title
+func speakerPodcast(source Source) (speaker, podcast string) {
+	speaker = source.Title
 	if speaker == "" {
 		speaker = source.Podcast
 	}
 	if speaker == "" {
 		speaker = "Speaker"
 	}
-	podcast := source.Podcast
+	podcast = source.Podcast
 	if podcast == "" {
 		podcast = "Podcast"
 	}
+	return speaker, podcast
+}
 
-	_, err := r.Run(r.LoopsDir, "clip.sh",
-		"--url", source.YouTubeURL,
-		"--start", c.StartTime,
-		"--end", c.EndTime,
-		"--id", c.ID,
-		"--out", "drafts")
-	if err != nil {
-		return "", err
+func (r Runner) WriteCandidateDraft(source Source, c Candidate, clipPath string) error {
+	speaker, podcast := speakerPodcast(source)
+	draftDir := filepath.Join(r.LoopsDir, "drafts", c.ID)
+	if err := os.MkdirAll(draftDir, 0o755); err != nil {
+		return err
 	}
 
-	clipPath := filepath.Join("drafts", c.ID, "clip.mp4")
-	draftDir := filepath.Join(r.LoopsDir, "drafts", c.ID)
 	postText := c.PostText
 	if postText == "" {
-		postText = fmt.Sprintf("%s: %s\n\n%s\n\nSource: %s", speaker, c.Hook, c.Take, podcast)
+		postText = fmt.Sprintf("%s: %s\n\n%s", speaker, c.Hook, c.Take)
 	}
+	postText = EnsurePostTextAttribution(postText, podcast, source.YouTubeURL)
 
 	meta := map[string]any{
 		"id":          c.ID,
@@ -128,11 +126,25 @@ func (r Runner) ClipCandidate(source Source, c Candidate) (string, error) {
 		"created_at":  c.CreatedAt,
 	}
 	metaBytes, _ := json.MarshalIndent(meta, "", "  ")
-	metaPath := filepath.Join(draftDir, "meta.json")
-	if err := os.WriteFile(metaPath, metaBytes, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(draftDir, "meta.json"), metaBytes, 0o644); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(draftDir, "post.txt"), []byte(postText), 0o644)
+}
+
+func (r Runner) ClipCandidate(source Source, c Candidate) (string, error) {
+	_, err := r.Run(r.LoopsDir, "clip.sh",
+		"--url", source.YouTubeURL,
+		"--start", c.StartTime,
+		"--end", c.EndTime,
+		"--id", c.ID,
+		"--out", "drafts")
+	if err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(filepath.Join(draftDir, "post.txt"), []byte(postText), 0o644); err != nil {
+
+	clipPath := filepath.Join("drafts", c.ID, "clip.mp4")
+	if err := r.WriteCandidateDraft(source, c, clipPath); err != nil {
 		return "", err
 	}
 	return clipPath, nil

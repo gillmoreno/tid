@@ -11,7 +11,7 @@
 - 2-3 sentences max context — sharp, specific, no fluff
 - Direct tone. No emojis. No "🧵". No "What do you think?" engagement bait. No LinkedIn/YouTube slop.
 - Accurate paraphrase only — stay faithful to the transcript segment
-- Attribution: `Source: {Podcast name}`
+- Attribution: `Source: {Podcast name}` then the original YouTube URL on the next line (required for compliance)
 - Keep total post readable; hook line should be punchy
 
 ## Example Output
@@ -21,6 +21,7 @@ David Friedberg @friedberg: Anthropic is trying to commoditize everyone's busine
 Friedberg, a life-sciences CEO and All-In host, on Anthropic's enterprise pitch to biotech: share your proprietary data, get model access. Nearly every company he spoke with reached the same conclusion.
 
 Source: All-In Podcast
+https://www.youtube.com/watch?v=...
 ```
 
 ## Forbidden

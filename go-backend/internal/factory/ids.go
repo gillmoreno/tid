@@ -2,6 +2,7 @@ package factory
 
 import (
 	"fmt"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -41,4 +42,32 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// FetchYouTubeMetadata fetches title and channel name using yt-dlp (no download).
+// Returns empty strings on failure.
+func FetchYouTubeMetadata(youtubeURL string) (title, podcast string) {
+	if youtubeURL == "" {
+		return "", ""
+	}
+	cmd := exec.Command("yt-dlp",
+		"--print", "%(title)s",
+		"--print", "%(channel)s",
+		"--no-download",
+		"--quiet",
+		"--no-warnings",
+		youtubeURL,
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", ""
+	}
+	parts := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)
+	if len(parts) > 0 {
+		title = strings.TrimSpace(parts[0])
+	}
+	if len(parts) > 1 {
+		podcast = strings.TrimSpace(parts[1])
+	}
+	return title, podcast
 }

@@ -29,7 +29,7 @@ Read the transcript and return ONLY valid JSON (no markdown fences) with this sh
       "end_time": "HH:MM:SS",
       "hook": "one-line punchy claim",
       "take": "2-3 sentences of context in Gil's voice",
-      "post_text": "full post ready for X: hook line, blank line, take, blank line, Source: Podcast",
+      "post_text": "full post ready for X: hook line, blank line, take, blank line, Source: Podcast, blank line, YouTube URL",
       "why_interesting": "why this moment matters",
       "confidence": 0.0
     }}

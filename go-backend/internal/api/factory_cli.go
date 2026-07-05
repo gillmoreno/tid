@@ -1,14 +1,26 @@
 package api
 
 import (
+	"strings"
 	"time"
 
 	"tid/go-backend/internal/factory"
 )
 
 func (a *App) IngestSource(url, title, podcast string) (factory.Source, error) {
-	id := factory.NewSourceID(url, podcast)
-	return a.factory.CreateSource(id, url, title, podcast)
+	t := strings.TrimSpace(title)
+	p := strings.TrimSpace(podcast)
+	if t == "" || p == "" {
+		tt, pp := factory.FetchYouTubeMetadata(url)
+		if t == "" {
+			t = tt
+		}
+		if p == "" {
+			p = pp
+		}
+	}
+	id := factory.NewSourceID(url, p)
+	return a.factory.CreateSource(id, url, t, p)
 }
 
 func (a *App) AnalyzeSourceCLI(sourceID string) ([]factory.Candidate, error) {
@@ -42,4 +54,8 @@ func (a *App) ScheduleCandidateCLI(candidateID string, at time.Time) (factory.Sc
 
 func (a *App) SchedulerTickCLI() ([]string, error) {
 	return a.runSchedulerTick()
+}
+
+func (a *App) PostNowCLI(candidateID string) (factory.Candidate, error) {
+	return a.runPrepareCandidate(candidateID)
 }

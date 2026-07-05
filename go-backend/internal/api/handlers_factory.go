@@ -29,6 +29,7 @@ func (a *App) mountFactoryRoutes(r chi.Router) {
 	r.Get("/factory/candidates/{id}", a.handleGetCandidate)
 	r.Patch("/factory/candidates/{id}", a.handlePatchCandidate)
 	r.Post("/factory/candidates/{id}/clip", a.handleClipCandidate)
+	r.Post("/factory/candidates/{id}/post-now", a.handlePostNowCandidate)
 	r.Post("/factory/candidates/{id}/schedule", a.handleScheduleCandidate)
 
 	r.Get("/factory/scheduled", a.handleListScheduled)
@@ -107,8 +108,21 @@ func (a *App) handleCreateSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "youtube_url required")
 		return
 	}
-	id := factory.NewSourceID(body.YouTubeURL, body.Podcast)
-	src, err := a.factory.CreateSource(id, body.YouTubeURL, body.Title, body.Podcast)
+
+	title := strings.TrimSpace(body.Title)
+	podcast := strings.TrimSpace(body.Podcast)
+	if title == "" || podcast == "" {
+		t, p := factory.FetchYouTubeMetadata(body.YouTubeURL)
+		if title == "" {
+			title = t
+		}
+		if podcast == "" {
+			podcast = p
+		}
+	}
+
+	id := factory.NewSourceID(body.YouTubeURL, podcast)
+	src, err := a.factory.CreateSource(id, body.YouTubeURL, title, podcast)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -190,7 +204,7 @@ func (a *App) handleListCandidates(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleGetCandidate(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	c, err := a.factory.GetCandidate(id)
+	c, err := a.factory.GetCandidateEnriched(id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "candidate not found")
 		return
@@ -210,7 +224,21 @@ func (a *App) handlePatchCandidate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	c, err := a.factory.UpdateCandidate(id, body.Hook, body.Take, body.PostText, body.Status)
+	postText := body.PostText
+	if strings.TrimSpace(postText) != "" {
+		cand, err := a.factory.GetCandidate(id)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "candidate not found")
+			return
+		}
+		src, err := a.factory.GetSource(cand.SourceID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		postText = factory.EnsurePostTextAttribution(postText, src.Podcast, src.YouTubeURL)
+	}
+	c, err := a.factory.UpdateCandidate(id, body.Hook, body.Take, postText, body.Status)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -238,6 +266,73 @@ func (a *App) handleClipCandidate(w http.ResponseWriter, r *http.Request) {
 	_ = a.factory.SetCandidateClip(id, clipPath)
 	c, _ = a.factory.GetCandidate(id)
 	writeJSON(w, c)
+}
+
+func (a *App) handlePostNowCandidate(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body struct {
+		Hook     string `json:"hook"`
+		Take     string `json:"take"`
+		PostText string `json:"post_text"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	if strings.TrimSpace(body.Hook) != "" || strings.TrimSpace(body.Take) != "" || strings.TrimSpace(body.PostText) != "" {
+		postText := body.PostText
+		if strings.TrimSpace(postText) != "" {
+			cand, err := a.factory.GetCandidate(id)
+			if err != nil {
+				writeError(w, http.StatusNotFound, "candidate not found")
+				return
+			}
+			src, err := a.factory.GetSource(cand.SourceID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			postText = factory.EnsurePostTextAttribution(postText, src.Podcast, src.YouTubeURL)
+		}
+		if _, err := a.factory.UpdateCandidate(id, body.Hook, body.Take, postText, ""); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	c, err := a.runPrepareCandidate(id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, c)
+}
+
+func (a *App) runPrepareCandidate(id string) (factory.Candidate, error) {
+	c, err := a.factory.GetCandidate(id)
+	if err != nil {
+		return factory.Candidate{}, err
+	}
+	src, err := a.factory.GetSource(c.SourceID)
+	if err != nil {
+		return factory.Candidate{}, err
+	}
+
+	if c.ClipPath == "" {
+		clipPath, err := a.runner.ClipCandidate(src, c)
+		if err != nil {
+			return factory.Candidate{}, err
+		}
+		if err := a.factory.SetCandidateClip(id, clipPath); err != nil {
+			return factory.Candidate{}, err
+		}
+		c.ClipPath = clipPath
+	} else if err := a.runner.WriteCandidateDraft(src, c, c.ClipPath); err != nil {
+		return factory.Candidate{}, err
+	}
+
+	if err := a.runner.PreparePost(id); err != nil {
+		return factory.Candidate{}, err
+	}
+	return a.factory.GetCandidateEnriched(id)
 }
 
 func (a *App) handleScheduleCandidate(w http.ResponseWriter, r *http.Request) {
@@ -293,24 +388,12 @@ func (a *App) runSchedulerTick() ([]string, error) {
 		if sp.Candidate == nil {
 			continue
 		}
-		c := *sp.Candidate
-		if c.ClipPath == "" {
-			src, err := a.factory.GetSource(c.SourceID)
-			if err != nil {
-				continue
-			}
-			if _, err := a.runner.ClipCandidate(src, c); err != nil {
-				continue
-			}
-			clipPath, _ := a.runner.ClipCandidate(src, c)
-			_ = a.factory.SetCandidateClip(c.ID, clipPath)
-		}
-		if err := a.runner.PreparePost(c.ID); err != nil {
-			a.logger.Printf("prepare-post failed for %s: %v", c.ID, err)
+		if _, err := a.runPrepareCandidate(sp.Candidate.ID); err != nil {
+			a.logger.Printf("prepare-post failed for %s: %v", sp.Candidate.ID, err)
 			continue
 		}
 		_ = a.factory.MarkScheduledPrepared(sp.ID)
-		prepared = append(prepared, c.ID)
+		prepared = append(prepared, sp.Candidate.ID)
 	}
 	return prepared, nil
 }

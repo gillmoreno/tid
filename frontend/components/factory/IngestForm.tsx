@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
 import { createSource } from "@/api/factory";
 import type { Source } from "@/types/factory";
@@ -13,6 +13,29 @@ export function IngestForm({ onCreated }: IngestFormProps) {
   const [podcast, setPodcast] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-fill title and podcast from YouTube oEmbed when URL is pasted
+  useEffect(() => {
+    const trimmed = url.trim();
+    if (!trimmed || (title && podcast)) return;
+    if (!trimmed.includes("youtube.com") && !trimmed.includes("youtu.be")) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const oembedURL = `https://www.youtube.com/oembed?url=${encodeURIComponent(trimmed)}&format=json`;
+        const res = await fetch(oembedURL);
+        if (res.ok) {
+          const data = await res.json();
+          if (!title && data.title) setTitle(data.title);
+          if (!podcast && data.author_name) setPodcast(data.author_name);
+        }
+      } catch {
+        // ignore fetch errors; backend will still try
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [url, title, podcast]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,7 +63,7 @@ export function IngestForm({ onCreated }: IngestFormProps) {
   return (
     <form onSubmit={handleSubmit} className="rounded-lg border border-line bg-ink-soft p-5">
       <h3 className="font-display text-sm font-bold text-white">Ingest podcast</h3>
-      <p className="mt-1 text-xs text-fog">Paste a YouTube URL to queue analysis.</p>
+      <p className="mt-1 text-xs text-fog">Paste a YouTube URL. Title and podcast name are auto-filled from the video.</p>
 
       <div className="mt-4 space-y-3">
         <input
@@ -56,14 +79,14 @@ export function IngestForm({ onCreated }: IngestFormProps) {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Episode title (optional)"
+            placeholder="Episode title (auto-filled from URL)"
             className="rounded-md border border-line bg-ink px-3 py-2 text-sm text-white placeholder:text-fog/60 focus:border-signal/50 focus:outline-none"
           />
           <input
             type="text"
             value={podcast}
             onChange={(e) => setPodcast(e.target.value)}
-            placeholder="Podcast name (optional)"
+            placeholder="Podcast name (auto-filled from URL)"
             className="rounded-md border border-line bg-ink px-3 py-2 text-sm text-white placeholder:text-fog/60 focus:border-signal/50 focus:outline-none"
           />
         </div>

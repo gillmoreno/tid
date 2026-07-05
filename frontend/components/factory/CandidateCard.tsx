@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Calendar, Film, Save, Scissors } from "lucide-react";
-import { clipCandidate, scheduleCandidate, updateCandidate } from "@/api/factory";
+import { Calendar, Film, Save, Scissors, Send } from "lucide-react";
+import { clipCandidate, postNowCandidate, scheduleCandidate, updateCandidate } from "@/api/factory";
 import {
   defaultScheduleTime,
   factoryStatusBadge,
@@ -22,6 +22,7 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
   const [saving, setSaving] = useState(false);
   const [clipping, setClipping] = useState(false);
   const [scheduling, setScheduling] = useState(false);
+  const [postingNow, setPostingNow] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,6 +70,20 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
       setMessage("Schedule failed.");
     } finally {
       setScheduling(false);
+    }
+  }
+
+  async function handlePostNow() {
+    setPostingNow(true);
+    setMessage(null);
+    try {
+      const updated = await postNowCandidate(candidate.id, { hook, take, post_text: postText });
+      onUpdated(updated);
+      setMessage("Post text copied — X compose + Finder opened. Cmd+V, drag clip, post.");
+    } catch {
+      setMessage("Post now failed.");
+    } finally {
+      setPostingNow(false);
     }
   }
 
@@ -143,22 +158,33 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
           {clipping ? "Clipping…" : candidate.clip_path ? "Re-clip" : "Clip video"}
         </button>
 
-        <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
+        <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
           <input
             type="datetime-local"
             value={scheduleAt}
             onChange={(e) => setScheduleAt(e.target.value)}
-            className="rounded-md border border-line bg-ink px-2 py-1.5 font-mono text-xs text-white focus:border-signal/50 focus:outline-none"
+            className="h-[30px] rounded-md border border-line bg-ink px-2 font-mono text-xs text-white focus:border-signal/50 focus:outline-none"
           />
-          <button
-            type="button"
-            onClick={handleSchedule}
-            disabled={scheduling}
-            className="inline-flex items-center gap-1.5 rounded bg-signal/10 px-3 py-1.5 text-xs text-signal transition hover:bg-signal/20 disabled:opacity-50"
-          >
-            <Calendar className="h-3 w-3" />
-            {scheduling ? "Scheduling…" : "Schedule post"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePostNow}
+              disabled={postingNow || clipping}
+              className="inline-flex h-[30px] items-center gap-1.5 rounded bg-emerald-500/15 px-3 text-xs text-emerald-400 transition hover:bg-emerald-500/25 disabled:opacity-50"
+            >
+              <Send className="h-3 w-3" />
+              {postingNow ? "Preparing…" : "Post now"}
+            </button>
+            <button
+              type="button"
+              onClick={handleSchedule}
+              disabled={scheduling}
+              className="inline-flex h-[30px] items-center gap-1.5 rounded bg-signal/10 px-3 text-xs text-signal transition hover:bg-signal/20 disabled:opacity-50"
+            >
+              <Calendar className="h-3 w-3" />
+              {scheduling ? "Scheduling…" : "Schedule post"}
+            </button>
+          </div>
         </div>
       </div>
 

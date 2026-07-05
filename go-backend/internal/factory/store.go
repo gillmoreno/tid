@@ -172,15 +172,21 @@ func (s *Store) InsertCandidates(sourceID string, items []AnalysisCandidate) ([]
 		return nil, err
 	}
 
+	src, err := s.GetSource(sourceID)
+	if err != nil {
+		return nil, err
+	}
+
 	var out []Candidate
 	for i, item := range items {
 		id := fmt.Sprintf("%s-c%02d", sourceID, i+1)
+		postText := EnsurePostTextAttribution(item.PostText, src.Podcast, src.YouTubeURL)
 		_, err := tx.Exec(`
 			INSERT INTO candidates (
 				id, source_id, rank, start_time, end_time, hook, take, post_text,
 				why_interesting, confidence, status
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed')`,
-			id, sourceID, i+1, item.StartTime, item.EndTime, item.Hook, item.Take, item.PostText,
+			id, sourceID, i+1, item.StartTime, item.EndTime, item.Hook, item.Take, postText,
 			item.WhyInteresting, item.Confidence)
 		if err != nil {
 			return nil, err
@@ -257,7 +263,11 @@ func (s *Store) ListCandidates(sourceID string) ([]Candidate, error) {
 		if scheduled.Valid {
 			c.ScheduledAt = &scheduled.String
 		}
-		out = append(out, c)
+		enriched, err := s.enrichCandidatePostText(c)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, enriched)
 	}
 	return out, rows.Err()
 }
@@ -274,7 +284,19 @@ func (s *Store) UpdateCandidate(id string, hook, take, postText, status string) 
 	if err != nil {
 		return Candidate{}, err
 	}
-	return s.GetCandidate(id)
+	c, err := s.GetCandidate(id)
+	if err != nil {
+		return Candidate{}, err
+	}
+	return s.enrichCandidatePostText(c)
+}
+
+func (s *Store) GetCandidateEnriched(id string) (Candidate, error) {
+	c, err := s.GetCandidate(id)
+	if err != nil {
+		return c, err
+	}
+	return s.enrichCandidatePostText(c)
 }
 
 func (s *Store) SetCandidateClip(id, clipPath string) error {

@@ -67,6 +67,14 @@ export async function clipCandidate(id: string): Promise<Candidate> {
   return data;
 }
 
+export async function postNowCandidate(
+  id: string,
+  patch?: Partial<Pick<Candidate, "hook" | "take" | "post_text">>
+): Promise<Candidate> {
+  const { data } = await apiClient.post<Candidate>(`/factory/candidates/${id}/post-now`, patch ?? {});
+  return data;
+}
+
 export async function scheduleCandidate(id: string, scheduledAt: string): Promise<ScheduledPost> {
   const { data } = await apiClient.post<ScheduledPost>(`/factory/candidates/${id}/schedule`, {
     scheduled_at: scheduledAt,

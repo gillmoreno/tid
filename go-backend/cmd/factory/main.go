@@ -19,6 +19,7 @@ func main() {
 	clip := flag.NewFlagSet("clip", flag.ExitOnError)
 	schedule := flag.NewFlagSet("schedule", flag.ExitOnError)
 	tick := flag.NewFlagSet("tick", flag.ExitOnError)
+	postNow := flag.NewFlagSet("post-now", flag.ExitOnError)
 
 	url := ingest.String("url", "", "YouTube URL")
 	title := ingest.String("title", "", "Speaker or episode title")
@@ -94,6 +95,16 @@ func main() {
 		} else {
 			fmt.Printf("prepared: %v\n", prepared)
 		}
+	case "post-now":
+		_ = postNow.Parse(os.Args[2:])
+		if *candidateID == "" {
+			log.Fatal("--candidate required")
+		}
+		c, err := app.PostNowCLI(*candidateID)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("prepared: %s (clip: %s)\n", c.ID, c.ClipPath)
 	default:
 		usage()
 		os.Exit(1)
@@ -108,5 +119,6 @@ Usage:
   factory analyze --source ID
   factory clip    --candidate ID
   factory schedule --candidate ID --at RFC3339
+  factory post-now --candidate ID
   factory tick    # run due scheduled posts (prepare-post flow)`)
 }
