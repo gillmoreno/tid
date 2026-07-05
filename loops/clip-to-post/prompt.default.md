@@ -6,8 +6,6 @@ For each moment:
 - Pick a clip between **30 seconds and 5 minutes**
 - Choose segments that stand alone without needing the full episode
 - Pick **Format A** (build the case) or **Format B** (quote excerpt) — whichever fits the clip
-- Write a **hook** (one line, punchy, names the speaker)
-- Write a **take** (context for Gil's review UI — why this clip, what angle to push)
 - Write **post_text** ready to paste on X:
   - Tag people/companies mentioned using @ handles from the MENTIONS dictionary
   - Format A: staccato beats, reframe → proof → pattern → closer/question

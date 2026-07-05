@@ -6,15 +6,13 @@ import sys
 
 
 def main() -> None:
-    out_path, hook = sys.argv[1], sys.argv[2]
+    out_path, snippet = sys.argv[1], sys.argv[2]
     data = {
         "candidates": [
             {
                 "start_time": "00:01:00",
                 "end_time": "00:01:45",
-                "hook": hook,
-                "take": "Placeholder take — re-run with grok login for real analysis, or edit in the Post Factory UI.",
-                "post_text": f"Speaker: {hook}\n\nPlaceholder take — edit before posting.\n\nSource: Podcast",
+                "post_text": f"{snippet}\n\nPlaceholder — re-run with grok login for real analysis, or edit in the Post Factory UI.\n\n@theallinpod",
                 "why_interesting": "Dev fallback candidate (grok unavailable)",
                 "confidence": 0.3,
             }

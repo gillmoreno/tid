@@ -30,7 +30,6 @@ CREATE TABLE IF NOT EXISTS mention_dictionaries (
 CREATE TABLE IF NOT EXISTS sources (
   id TEXT PRIMARY KEY,
   youtube_url TEXT NOT NULL,
-  title TEXT NOT NULL DEFAULT '',
   podcast TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'ingested',
   error_message TEXT NOT NULL DEFAULT '',
@@ -44,8 +43,6 @@ CREATE TABLE IF NOT EXISTS candidates (
   rank INTEGER NOT NULL DEFAULT 0,
   start_time TEXT NOT NULL,
   end_time TEXT NOT NULL,
-  hook TEXT NOT NULL DEFAULT '',
-  take TEXT NOT NULL DEFAULT '',
   post_text TEXT NOT NULL DEFAULT '',
   why_interesting TEXT NOT NULL DEFAULT '',
   confidence REAL NOT NULL DEFAULT 0,

@@ -38,6 +38,17 @@ func (d MentionDictionary) ResolvePodcastHandle(podcast string) string {
 	return d.resolveHandle(podcast, d.Podcasts)
 }
 
+func (d MentionDictionary) PodcastOptions() []PodcastOption {
+	out := make([]PodcastOption, 0, len(d.Podcasts))
+	for _, p := range d.Podcasts {
+		out = append(out, PodcastOption{
+			Name:   p.Name,
+			Handle: normalizeHandle(p.Handle),
+		})
+	}
+	return out
+}
+
 func (d MentionDictionary) resolveHandle(name string, entries []MentionEntry) string {
 	name = strings.TrimSpace(name)
 	if name == "" {

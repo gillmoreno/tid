@@ -21,7 +21,7 @@ BIASES (Gil's lens — curiosity mixed with skepticism):
 INSTRUCTIONS:
 {prompt}
 
-MENTIONS DICTIONARY (tag these @ handles when names appear — update in Post Factory settings):
+MENTIONS DICTIONARY (tag these @ handles when names appear — podcast selection maps to attribution):
 {mentions}
 
 TASK:
@@ -31,10 +31,8 @@ Read the transcript and return ONLY valid JSON (no markdown fences) with this sh
     {{
       "start_time": "HH:MM:SS",
       "end_time": "HH:MM:SS",
-      "hook": "one-line punchy claim",
-      "take": "2-4 sentences: angle for Gil, format choice, what to push",
       "post_text": "full post ready for X with @ tags; end with podcast @ only (never YouTube URL)",
-      "why_interesting": "why this moment matters",
+      "why_interesting": "one sentence for Gil's review — format choice, angle, why this clip",
       "confidence": 0.0
     }}
   ]
@@ -47,8 +45,7 @@ Rules:
 - Choose Format A (essay) or Format B (quote) per clip
 - Tag people/companies from MENTIONS dictionary when referenced
 - End post_text with podcast @ handle — not a YouTube link
-- No emojis, no hashtags
-- Speaker name in hook when known"""
+- No emojis, no hashtags"""
     print(text)
 
 

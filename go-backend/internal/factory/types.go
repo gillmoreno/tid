@@ -24,10 +24,14 @@ type MentionDictionaryProfile struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type PodcastOption struct {
+	Name   string `json:"name"`
+	Handle string `json:"handle"`
+}
+
 type Source struct {
 	ID           string  `json:"id"`
 	YouTubeURL   string  `json:"youtube_url"`
-	Title        string  `json:"title"`
 	Podcast      string  `json:"podcast"`
 	Status       string  `json:"status"`
 	ErrorMessage string  `json:"error_message,omitempty"`
@@ -41,8 +45,6 @@ type Candidate struct {
 	Rank           int     `json:"rank"`
 	StartTime      string  `json:"start_time"`
 	EndTime        string  `json:"end_time"`
-	Hook           string  `json:"hook"`
-	Take           string  `json:"take"`
 	PostText       string  `json:"post_text"`
 	WhyInteresting string  `json:"why_interesting"`
 	Confidence     float64 `json:"confidence"`
@@ -54,20 +56,18 @@ type Candidate struct {
 }
 
 type ScheduledPost struct {
-	ID          string  `json:"id"`
-	CandidateID string  `json:"candidate_id"`
-	ScheduledAt string  `json:"scheduled_at"`
-	Status      string  `json:"status"`
-	PreparedAt  *string `json:"prepared_at,omitempty"`
-	CreatedAt   string  `json:"created_at"`
+	ID          string     `json:"id"`
+	CandidateID string     `json:"candidate_id"`
+	ScheduledAt string     `json:"scheduled_at"`
+	Status      string     `json:"status"`
+	PreparedAt  *string    `json:"prepared_at,omitempty"`
+	CreatedAt   string     `json:"created_at"`
 	Candidate   *Candidate `json:"candidate,omitempty"`
 }
 
 type AnalysisCandidate struct {
 	StartTime      string  `json:"start_time"`
 	EndTime        string  `json:"end_time"`
-	Hook           string  `json:"hook"`
-	Take           string  `json:"take"`
 	PostText       string  `json:"post_text"`
 	WhyInteresting string  `json:"why_interesting"`
 	Confidence     float64 `json:"confidence"`
@@ -78,7 +78,5 @@ type AnalysisResult struct {
 }
 
 type RewriteResult struct {
-	Hook     string `json:"hook"`
-	Take     string `json:"take"`
 	PostText string `json:"post_text"`
 }

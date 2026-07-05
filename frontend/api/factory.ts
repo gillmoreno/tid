@@ -4,6 +4,7 @@ import type {
   BiasProfile,
   Candidate,
   MentionDictionaryProfile,
+  PodcastOption,
   PromptTemplate,
   ScheduledPost,
   SchedulerTickResult,
@@ -45,10 +46,14 @@ export async function fetchSources(): Promise<Source[]> {
   return data;
 }
 
+export async function fetchPodcasts(): Promise<PodcastOption[]> {
+  const { data } = await apiClient.get<PodcastOption[]>("/factory/podcasts");
+  return data;
+}
+
 export async function createSource(input: {
   youtube_url: string;
-  title?: string;
-  podcast?: string;
+  podcast: string;
 }): Promise<Source> {
   const { data } = await apiClient.post<Source>("/factory/sources", input);
   return data;
@@ -71,7 +76,7 @@ export async function deleteCandidate(id: string): Promise<void> {
 
 export async function updateCandidate(
   id: string,
-  patch: Partial<Pick<Candidate, "hook" | "take" | "post_text" | "status">>
+  patch: Partial<Pick<Candidate, "post_text" | "status">>
 ): Promise<Candidate> {
   const { data } = await apiClient.patch<Candidate>(`/factory/candidates/${id}`, patch);
   return data;
@@ -85,7 +90,7 @@ export async function clipCandidate(id: string): Promise<Candidate> {
 export async function rewriteCandidate(
   id: string,
   instruction: string,
-  patch?: Partial<Pick<Candidate, "hook" | "take" | "post_text">>
+  patch?: Partial<Pick<Candidate, "post_text">>
 ): Promise<Candidate> {
   const { data } = await apiClient.post<Candidate>(`/factory/candidates/${id}/rewrite`, {
     instruction,
@@ -96,7 +101,7 @@ export async function rewriteCandidate(
 
 export async function postNowCandidate(
   id: string,
-  patch?: Partial<Pick<Candidate, "hook" | "take" | "post_text">>
+  patch?: Partial<Pick<Candidate, "post_text">>
 ): Promise<Candidate> {
   const { data } = await apiClient.post<Candidate>(`/factory/candidates/${id}/post-now`, patch ?? {});
   return data;

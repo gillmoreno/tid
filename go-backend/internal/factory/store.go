@@ -146,10 +146,10 @@ func (s *Store) UpdateActivePrompt(content string) (PromptTemplate, error) {
 	return s.GetActivePrompt()
 }
 
-func (s *Store) CreateSource(id, url, title, podcast string) (Source, error) {
+func (s *Store) CreateSource(id, url, podcast string) (Source, error) {
 	_, err := s.db.Exec(`
-		INSERT INTO sources (id, youtube_url, title, podcast, status)
-		VALUES (?, ?, ?, ?, 'ingested')`, id, url, title, podcast)
+		INSERT INTO sources (id, youtube_url, podcast, status)
+		VALUES (?, ?, ?, 'ingested')`, id, url, podcast)
 	if err != nil {
 		return Source{}, err
 	}
@@ -160,9 +160,9 @@ func (s *Store) GetSource(id string) (Source, error) {
 	var src Source
 	var analyzed sql.NullString
 	err := s.db.QueryRow(`
-		SELECT id, youtube_url, title, podcast, status, error_message, created_at, analyzed_at
+		SELECT id, youtube_url, podcast, status, error_message, created_at, analyzed_at
 		FROM sources WHERE id = ?`, id).Scan(
-		&src.ID, &src.YouTubeURL, &src.Title, &src.Podcast, &src.Status, &src.ErrorMessage, &src.CreatedAt, &analyzed)
+		&src.ID, &src.YouTubeURL, &src.Podcast, &src.Status, &src.ErrorMessage, &src.CreatedAt, &analyzed)
 	if err != nil {
 		return src, err
 	}
@@ -174,7 +174,7 @@ func (s *Store) GetSource(id string) (Source, error) {
 
 func (s *Store) ListSources() ([]Source, error) {
 	rows, err := s.db.Query(`
-		SELECT id, youtube_url, title, podcast, status, error_message, created_at, analyzed_at
+		SELECT id, youtube_url, podcast, status, error_message, created_at, analyzed_at
 		FROM sources ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -184,7 +184,7 @@ func (s *Store) ListSources() ([]Source, error) {
 	for rows.Next() {
 		var src Source
 		var analyzed sql.NullString
-		if err := rows.Scan(&src.ID, &src.YouTubeURL, &src.Title, &src.Podcast, &src.Status, &src.ErrorMessage, &src.CreatedAt, &analyzed); err != nil {
+		if err := rows.Scan(&src.ID, &src.YouTubeURL, &src.Podcast, &src.Status, &src.ErrorMessage, &src.CreatedAt, &analyzed); err != nil {
 			return nil, err
 		}
 		if analyzed.Valid {
@@ -232,10 +232,10 @@ func (s *Store) InsertCandidates(sourceID string, items []AnalysisCandidate) ([]
 		postText := EnsurePostTextAttribution(item.PostText, src.Podcast, dict)
 		_, err := tx.Exec(`
 			INSERT INTO candidates (
-				id, source_id, rank, start_time, end_time, hook, take, post_text,
+				id, source_id, rank, start_time, end_time, post_text,
 				why_interesting, confidence, status
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed')`,
-			id, sourceID, i+1, item.StartTime, item.EndTime, item.Hook, item.Take, postText,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'proposed')`,
+			id, sourceID, i+1, item.StartTime, item.EndTime, postText,
 			item.WhyInteresting, item.Confidence)
 		if err != nil {
 			return nil, err
@@ -256,13 +256,13 @@ func scanCandidateTx(q sqlExecutor, id string) (Candidate, error) {
 	var c Candidate
 	var scheduled sql.NullString
 	err := q.QueryRow(`
-		SELECT c.id, c.source_id, c.rank, c.start_time, c.end_time, c.hook, c.take, c.post_text,
+		SELECT c.id, c.source_id, c.rank, c.start_time, c.end_time, c.post_text,
 		       c.why_interesting, c.confidence, c.clip_path, c.status, c.created_at, c.updated_at,
 		       s.scheduled_at
 		FROM candidates c
 		LEFT JOIN scheduled_posts s ON s.candidate_id = c.id
 		WHERE c.id = ?`, id).Scan(
-		&c.ID, &c.SourceID, &c.Rank, &c.StartTime, &c.EndTime, &c.Hook, &c.Take, &c.PostText,
+		&c.ID, &c.SourceID, &c.Rank, &c.StartTime, &c.EndTime, &c.PostText,
 		&c.WhyInteresting, &c.Confidence, &c.ClipPath, &c.Status, &c.CreatedAt, &c.UpdatedAt, &scheduled)
 	if err != nil {
 		return c, err
@@ -283,7 +283,7 @@ func (s *Store) GetCandidate(id string) (Candidate, error) {
 
 func (s *Store) ListCandidates(sourceID string) ([]Candidate, error) {
 	query := `
-		SELECT c.id, c.source_id, c.rank, c.start_time, c.end_time, c.hook, c.take, c.post_text,
+		SELECT c.id, c.source_id, c.rank, c.start_time, c.end_time, c.post_text,
 		       c.why_interesting, c.confidence, c.clip_path, c.status, c.created_at, c.updated_at,
 		       s.scheduled_at
 		FROM candidates c
@@ -305,7 +305,7 @@ func (s *Store) ListCandidates(sourceID string) ([]Candidate, error) {
 		var c Candidate
 		var scheduled sql.NullString
 		if err := rows.Scan(
-			&c.ID, &c.SourceID, &c.Rank, &c.StartTime, &c.EndTime, &c.Hook, &c.Take, &c.PostText,
+			&c.ID, &c.SourceID, &c.Rank, &c.StartTime, &c.EndTime, &c.PostText,
 			&c.WhyInteresting, &c.Confidence, &c.ClipPath, &c.Status, &c.CreatedAt, &c.UpdatedAt, &scheduled); err != nil {
 			return nil, err
 		}
@@ -321,15 +321,13 @@ func (s *Store) ListCandidates(sourceID string) ([]Candidate, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) UpdateCandidate(id string, hook, take, postText, status string) (Candidate, error) {
+func (s *Store) UpdateCandidate(id string, postText, status string) (Candidate, error) {
 	_, err := s.db.Exec(`
 		UPDATE candidates SET
-			hook = COALESCE(NULLIF(?, ''), hook),
-			take = COALESCE(NULLIF(?, ''), take),
 			post_text = COALESCE(NULLIF(?, ''), post_text),
 			status = COALESCE(NULLIF(?, ''), status),
 			updated_at = datetime('now')
-		WHERE id = ?`, hook, take, postText, status, id)
+		WHERE id = ?`, postText, status, id)
 	if err != nil {
 		return Candidate{}, err
 	}

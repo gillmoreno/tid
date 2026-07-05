@@ -18,7 +18,7 @@ const REFINE_PRESETS = [
   {
     label: "More controversial",
     instruction:
-      "Make the take more provocative and skeptical while staying factual. Draw a sharper implication — who wins, who loses, who should worry.",
+      "Make the post more provocative and skeptical while staying factual. Draw a sharper implication — who wins, who loses, who should worry.",
   },
   {
     label: "Less controversial",
@@ -58,8 +58,6 @@ interface CandidateCardProps {
 }
 
 export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCardProps) {
-  const [hook, setHook] = useState(candidate.hook);
-  const [take, setTake] = useState(candidate.take);
   const [postText, setPostText] = useState(candidate.post_text);
   const [scheduleAt, setScheduleAt] = useState(defaultScheduleTime());
   const [saving, setSaving] = useState(false);
@@ -71,8 +69,6 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    setHook(candidate.hook);
-    setTake(candidate.take);
     setPostText(candidate.post_text);
   }, [candidate]);
 
@@ -80,7 +76,7 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
     setSaving(true);
     setMessage(null);
     try {
-      const updated = await updateCandidate(candidate.id, { hook, take, post_text: postText });
+      const updated = await updateCandidate(candidate.id, { post_text: postText });
       onUpdated(updated);
       setMessage("Saved.");
     } catch {
@@ -125,19 +121,14 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
     setRewriting(true);
     setMessage(null);
     try {
-      const updated = await rewriteCandidate(candidate.id, trimmed, {
-        hook,
-        take,
-        post_text: postText,
-      });
-      setHook(updated.hook);
-      setTake(updated.take);
+      const updated = await rewriteCandidate(candidate.id, trimmed, { post_text: postText });
       setPostText(updated.post_text);
       onUpdated(updated);
       setRefineInstruction("");
       setMessage("Refined.");
-    } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || "unknown error";
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } }; message?: string };
+      const msg = err?.response?.data?.error || err?.message || "unknown error";
       setMessage(`Refine failed: ${String(msg).slice(0, 120)}`);
     } finally {
       setRewriting(false);
@@ -148,7 +139,7 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
     setPostingNow(true);
     setMessage(null);
     try {
-      const updated = await postNowCandidate(candidate.id, { hook, take, post_text: postText });
+      const updated = await postNowCandidate(candidate.id, { post_text: postText });
       onUpdated(updated);
       setMessage("Post text copied — X compose + Finder opened. Cmd+V, drag clip, post.");
     } catch {
@@ -178,28 +169,11 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
 
       <div className="mt-4 space-y-3">
         <div>
-          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Hook</label>
-          <input
-            value={hook}
-            onChange={(e) => setHook(e.target.value)}
-            className="mt-1 w-full rounded-md border border-line bg-ink px-3 py-2 text-sm text-white focus:border-signal/50 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Take</label>
-          <textarea
-            value={take}
-            onChange={(e) => setTake(e.target.value)}
-            rows={3}
-            className="mt-1 w-full resize-y rounded-md border border-line bg-ink px-3 py-2 text-sm text-fog-light focus:border-signal/50 focus:outline-none"
-          />
-        </div>
-        <div>
           <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Post text</label>
           <textarea
             value={postText}
             onChange={(e) => setPostText(e.target.value)}
-            rows={8}
+            rows={12}
             className="mt-1 w-full resize-y rounded-md border border-line bg-ink px-3 py-2 font-mono text-xs leading-relaxed text-fog-light focus:border-signal/50 focus:outline-none"
           />
         </div>

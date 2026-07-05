@@ -69,7 +69,7 @@ export function ScheduledQueue({ posts, onTick }: ScheduledQueueProps) {
                 </div>
                 {c && (
                   <p className="mt-1 truncate text-xs text-fog">
-                    {c.hook || c.id}
+                    {c.post_text.slice(0, 80) || c.id}
                   </p>
                 )}
                 {post.prepared_at && (

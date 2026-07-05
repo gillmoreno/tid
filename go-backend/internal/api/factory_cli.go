@@ -1,26 +1,20 @@
 package api
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"tid/go-backend/internal/factory"
 )
 
-func (a *App) IngestSource(url, title, podcast string) (factory.Source, error) {
-	t := strings.TrimSpace(title)
+func (a *App) IngestSource(url, podcast string) (factory.Source, error) {
 	p := strings.TrimSpace(podcast)
-	if t == "" || p == "" {
-		tt, pp := factory.FetchYouTubeMetadata(url)
-		if t == "" {
-			t = tt
-		}
-		if p == "" {
-			p = pp
-		}
+	if p == "" {
+		return factory.Source{}, fmt.Errorf("podcast required")
 	}
 	id := factory.NewSourceID(url, p)
-	return a.factory.CreateSource(id, url, t, p)
+	return a.factory.CreateSource(id, url, p)
 }
 
 func (a *App) AnalyzeSourceCLI(sourceID string) ([]factory.Candidate, error) {

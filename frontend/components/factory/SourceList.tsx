@@ -66,7 +66,7 @@ export function SourceList({
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate text-sm font-medium text-white">
-                    {source.title || source.podcast || source.id}
+                    {source.podcast || source.id}
                   </span>
                   <span className={factoryStatusBadge(source.status)}>{source.status}</span>
                 </div>

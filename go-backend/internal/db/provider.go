@@ -34,8 +34,10 @@ func NewProvider(dbPath string) (*Provider, error) {
 }
 
 func (p *Provider) migrate() error {
-	_, err := p.DB.Exec(SchemaSQL)
-	return err
+	if _, err := p.DB.Exec(SchemaSQL); err != nil {
+		return err
+	}
+	return p.migrateV2()
 }
 
 func (p *Provider) Close() error {

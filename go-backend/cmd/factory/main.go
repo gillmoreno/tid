@@ -22,7 +22,6 @@ func main() {
 	postNow := flag.NewFlagSet("post-now", flag.ExitOnError)
 
 	url := ingest.String("url", "", "YouTube URL")
-	title := ingest.String("title", "", "Speaker or episode title")
 	podcast := ingest.String("podcast", "", "Podcast name")
 	sourceID := flag.String("source", "", "Source ID")
 	candidateID := flag.String("candidate", "", "Candidate ID")
@@ -46,7 +45,10 @@ func main() {
 		if *url == "" {
 			log.Fatal("--url required")
 		}
-		src, err := app.IngestSource(*url, *title, *podcast)
+		if *podcast == "" {
+			log.Fatal("--podcast required")
+		}
+		src, err := app.IngestSource(*url, *podcast)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -115,7 +117,7 @@ func usage() {
 	fmt.Println(`Post Factory CLI
 
 Usage:
-  factory ingest  --url URL [--title NAME] [--podcast NAME]
+  factory ingest  --url URL --podcast NAME
   factory analyze --source ID
   factory clip    --candidate ID
   factory schedule --candidate ID --at RFC3339

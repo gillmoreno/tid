@@ -30,7 +30,7 @@ export function CandidatesTable({
         <thead>
           <tr className="border-b border-line font-mono text-[10px] uppercase tracking-wider text-fog">
             <th className="px-4 py-3 font-normal">#</th>
-            <th className="px-4 py-3 font-normal">Hook</th>
+            <th className="px-4 py-3 font-normal">Post</th>
             <th className="px-4 py-3 font-normal">Clip</th>
             <th className="px-4 py-3 font-normal">Status</th>
             <th className="px-4 py-3 font-normal">Conf</th>
@@ -51,7 +51,7 @@ export function CandidatesTable({
               >
                 <td className="px-4 py-3 font-mono text-xs text-signal">#{candidate.rank}</td>
                 <td className="px-4 py-3">
-                  <p className="font-medium text-white">{truncate(candidate.hook, 72)}</p>
+                  <p className="font-medium text-white">{truncate(candidate.post_text, 72)}</p>
                   <p className="mt-0.5 font-mono text-[10px] text-fog">
                     {candidate.start_time} → {candidate.end_time}
                   </p>

@@ -87,18 +87,11 @@ func (r Runner) Analyze(sourceID string, bias, prompt, mentions string) (Analysi
 }
 
 func speakerPodcast(source Source) (speaker, podcast string) {
-	speaker = source.Title
-	if speaker == "" {
-		speaker = source.Podcast
-	}
-	if speaker == "" {
-		speaker = "Speaker"
-	}
 	podcast = source.Podcast
 	if podcast == "" {
 		podcast = "Podcast"
 	}
-	return speaker, podcast
+	return podcast, podcast
 }
 
 func (r Runner) WriteCandidateDraft(source Source, c Candidate, clipPath string, dict MentionDictionary) error {
@@ -108,11 +101,7 @@ func (r Runner) WriteCandidateDraft(source Source, c Candidate, clipPath string,
 		return err
 	}
 
-	postText := c.PostText
-	if postText == "" {
-		postText = fmt.Sprintf("%s: %s\n\n%s", speaker, c.Hook, c.Take)
-	}
-	postText = EnsurePostTextAttribution(postText, podcast, dict)
+	postText := EnsurePostTextAttribution(c.PostText, podcast, dict)
 
 	meta := map[string]any{
 		"id":          c.ID,
@@ -176,8 +165,6 @@ func (r Runner) RewriteCandidate(bias, mentions string, source Source, c Candida
 		"biases":         bias,
 		"mentions":       mentions,
 		"instruction":    instruction,
-		"hook":           c.Hook,
-		"take":           c.Take,
 		"post_text":      c.PostText,
 		"podcast":        podcast,
 		"podcast_handle": podcastHandle,
