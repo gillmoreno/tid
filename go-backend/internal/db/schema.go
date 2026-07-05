@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS mention_dictionaries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  content TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS sources (
   id TEXT PRIMARY KEY,
   youtube_url TEXT NOT NULL,

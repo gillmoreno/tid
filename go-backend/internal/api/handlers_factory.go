@@ -19,6 +19,8 @@ func (a *App) mountFactoryRoutes(r chi.Router) {
 	r.Put("/factory/biases", a.handlePutBiases)
 	r.Get("/factory/prompt", a.handleGetPrompt)
 	r.Put("/factory/prompt", a.handlePutPrompt)
+	r.Get("/factory/mentions", a.handleGetMentions)
+	r.Put("/factory/mentions", a.handlePutMentions)
 
 	r.Get("/factory/sources", a.handleListSources)
 	r.Post("/factory/sources", a.handleCreateSource)
@@ -29,6 +31,7 @@ func (a *App) mountFactoryRoutes(r chi.Router) {
 	r.Get("/factory/candidates/{id}", a.handleGetCandidate)
 	r.Patch("/factory/candidates/{id}", a.handlePatchCandidate)
 	r.Post("/factory/candidates/{id}/clip", a.handleClipCandidate)
+	r.Post("/factory/candidates/{id}/rewrite", a.handleRewriteCandidate)
 	r.Post("/factory/candidates/{id}/post-now", a.handlePostNowCandidate)
 	r.Post("/factory/candidates/{id}/schedule", a.handleScheduleCandidate)
 
@@ -84,6 +87,39 @@ func (a *App) handlePutPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, p)
+}
+
+func (a *App) handleGetMentions(w http.ResponseWriter, _ *http.Request) {
+	m, err := a.factory.GetActiveMentions()
+	if err != nil {
+		writeError(w, http.StatusNotFound, "mentions not found")
+		return
+	}
+	writeJSON(w, m)
+}
+
+func (a *App) handlePutMentions(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Content) == "" {
+		writeError(w, http.StatusBadRequest, "content required")
+		return
+	}
+	m, err := a.factory.UpdateActiveMentions(body.Content)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, m)
+}
+
+func (a *App) activeMentionDict() (factory.MentionDictionary, error) {
+	m, err := a.factory.GetActiveMentions()
+	if err != nil {
+		return factory.MentionDictionary{}, err
+	}
+	return factory.ParseMentionDictionary(m.Content), nil
 }
 
 func (a *App) handleListSources(w http.ResponseWriter, _ *http.Request) {
@@ -174,7 +210,13 @@ func (a *App) runAnalyze(sourceID string) (map[string]any, error) {
 		return nil, err
 	}
 
-	analysis, err := a.runner.Analyze(sourceID, bias.Content, prompt.Content)
+	mentions, err := a.factory.GetActiveMentions()
+	if err != nil {
+		_ = a.factory.SetSourceStatus(sourceID, "failed", err.Error())
+		return nil, err
+	}
+
+	analysis, err := a.runner.Analyze(sourceID, bias.Content, prompt.Content, mentions.Content)
 	if err != nil {
 		_ = a.factory.SetSourceStatus(sourceID, "failed", err.Error())
 		return nil, err
@@ -236,7 +278,12 @@ func (a *App) handlePatchCandidate(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		postText = factory.EnsurePostTextAttribution(postText, src.Podcast, src.YouTubeURL)
+		dict, err := a.activeMentionDict()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		postText = factory.EnsurePostTextAttribution(postText, src.Podcast, dict)
 	}
 	c, err := a.factory.UpdateCandidate(id, body.Hook, body.Take, postText, body.Status)
 	if err != nil {
@@ -258,14 +305,79 @@ func (a *App) handleClipCandidate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	clipPath, err := a.runner.ClipCandidate(src, c)
+	dict, err := a.activeMentionDict()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	clipPath, err := a.runner.ClipCandidate(src, c, dict)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	_ = a.factory.SetCandidateClip(id, clipPath)
-	c, _ = a.factory.GetCandidate(id)
+	c, _ = a.factory.GetCandidateEnriched(id)
 	writeJSON(w, c)
+}
+
+func (a *App) handleRewriteCandidate(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body struct {
+		Instruction string `json:"instruction"`
+		Hook        string `json:"hook"`
+		Take        string `json:"take"`
+		PostText    string `json:"post_text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Instruction) == "" {
+		writeError(w, http.StatusBadRequest, "instruction required")
+		return
+	}
+
+	c, err := a.factory.GetCandidate(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "candidate not found")
+		return
+	}
+	if strings.TrimSpace(body.Hook) != "" {
+		c.Hook = body.Hook
+	}
+	if strings.TrimSpace(body.Take) != "" {
+		c.Take = body.Take
+	}
+	if strings.TrimSpace(body.PostText) != "" {
+		c.PostText = body.PostText
+	}
+
+	src, err := a.factory.GetSource(c.SourceID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	bias, err := a.factory.GetActiveBias()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	mentions, err := a.factory.GetActiveMentions()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	rewritten, err := a.runner.RewriteCandidate(bias.Content, mentions.Content, src, c, body.Instruction)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	updated, err := a.factory.UpdateCandidate(id, rewritten.Hook, rewritten.Take, rewritten.PostText, "")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, updated)
 }
 
 func (a *App) handlePostNowCandidate(w http.ResponseWriter, r *http.Request) {
@@ -290,7 +402,12 @@ func (a *App) handlePostNowCandidate(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-			postText = factory.EnsurePostTextAttribution(postText, src.Podcast, src.YouTubeURL)
+			dict, derr := a.activeMentionDict()
+			if derr != nil {
+				writeError(w, http.StatusInternalServerError, derr.Error())
+				return
+			}
+			postText = factory.EnsurePostTextAttribution(postText, src.Podcast, dict)
 		}
 		if _, err := a.factory.UpdateCandidate(id, body.Hook, body.Take, postText, ""); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -316,8 +433,13 @@ func (a *App) runPrepareCandidate(id string) (factory.Candidate, error) {
 		return factory.Candidate{}, err
 	}
 
+	dict, err := a.activeMentionDict()
+	if err != nil {
+		return factory.Candidate{}, err
+	}
+
 	if c.ClipPath == "" {
-		clipPath, err := a.runner.ClipCandidate(src, c)
+		clipPath, err := a.runner.ClipCandidate(src, c, dict)
 		if err != nil {
 			return factory.Candidate{}, err
 		}
@@ -325,7 +447,7 @@ func (a *App) runPrepareCandidate(id string) (factory.Candidate, error) {
 			return factory.Candidate{}, err
 		}
 		c.ClipPath = clipPath
-	} else if err := a.runner.WriteCandidateDraft(src, c, c.ClipPath); err != nil {
+	} else if err := a.runner.WriteCandidateDraft(src, c, c.ClipPath, dict); err != nil {
 		return factory.Candidate{}, err
 	}
 
@@ -409,8 +531,17 @@ func loadSeedFile(repoRoot, rel string) string {
 func seedFactoryStore(store *factory.Store, repoRoot string) error {
 	bias := loadSeedFile(repoRoot, "loops/clip-to-post/biases.default.md")
 	prompt := loadSeedFile(repoRoot, "loops/clip-to-post/prompt.default.md")
+	mentions := loadSeedFile(repoRoot, "loops/clip-to-post/mentions.default.json")
 	if bias == "" || prompt == "" {
 		return fmt.Errorf("missing seed files")
 	}
-	return store.SeedDefaults(bias, prompt)
+	if err := store.SeedDefaults(bias, prompt); err != nil {
+		return err
+	}
+	if mentions != "" {
+		if err := store.SeedMentions(mentions); err != nil {
+			return err
+		}
+	}
+	return nil
 }

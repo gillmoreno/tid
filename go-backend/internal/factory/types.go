@@ -16,6 +16,14 @@ type PromptTemplate struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type MentionDictionaryProfile struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Content   string `json:"content"`
+	IsActive  bool   `json:"is_active"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 type Source struct {
 	ID           string  `json:"id"`
 	YouTubeURL   string  `json:"youtube_url"`
@@ -67,4 +75,10 @@ type AnalysisCandidate struct {
 
 type AnalysisResult struct {
 	Candidates []AnalysisCandidate `json:"candidates"`
+}
+
+type RewriteResult struct {
+	Hook     string `json:"hook"`
+	Take     string `json:"take"`
+	PostText string `json:"post_text"`
 }

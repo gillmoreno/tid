@@ -14,6 +14,14 @@ export interface PromptTemplate {
   updated_at: string;
 }
 
+export interface MentionDictionaryProfile {
+  id: number;
+  name: string;
+  content: string;
+  is_active: boolean;
+  updated_at: string;
+}
+
 export interface Source {
   id: string;
   youtube_url: string;

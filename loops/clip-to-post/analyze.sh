@@ -23,6 +23,7 @@ done
 
 BIASES="$(jq -r '.biases' "$INPUT")"
 PROMPT="$(jq -r '.prompt' "$INPUT")"
+MENTIONS="$(jq -r '.mentions // ""' "$INPUT")"
 TRANSCRIPT="$(jq -r '.transcript' "$INPUT")"
 
 OUT_DIR="$(dirname "$OUT")"
@@ -30,6 +31,7 @@ mkdir -p "$OUT_DIR"
 
 export FACTORY_BIASES="$BIASES"
 export FACTORY_PROMPT="$PROMPT"
+export FACTORY_MENTIONS="$MENTIONS"
 SYSTEM_PROMPT="$(python3 "$SCRIPT_DIR/build_system_prompt.py")"
 
 if command -v grok >/dev/null 2>&1 && [[ -f "$HOME/.grok/auth.json" || -n "${XAI_API_KEY:-}" ]]; then

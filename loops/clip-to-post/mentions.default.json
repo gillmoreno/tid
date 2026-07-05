@@ -1,0 +1,25 @@
+{
+  "people": [
+    { "name": "David Sacks", "handle": "DavidSacks", "aliases": ["Sacks"] },
+    { "name": "Chamath Palihapitiya", "handle": "chamath", "aliases": ["Chamath"] },
+    { "name": "David Friedberg", "handle": "friedberg", "aliases": ["Friedberg"] },
+    { "name": "Jason Calacanis", "handle": "Jason", "aliases": ["Calacanis"] },
+    { "name": "Alex Karp", "handle": "arkynk", "aliases": ["Karp"] },
+    { "name": "Sebastian Siemiatkowski", "handle": "klarnaseb", "aliases": ["klarnaseb", "Sebastian Siemiatkowski"] },
+    { "name": "Elon Musk", "handle": "elonmusk", "aliases": ["Elon", "Musk"] },
+    { "name": "Naval Ravikant", "handle": "naval", "aliases": ["Naval"] },
+    { "name": "Dwarkesh Patel", "handle": "dwarkesh_sp", "aliases": ["Dwarkesh"] }
+  ],
+  "companies": [
+    { "name": "Klarna", "handle": "Klarna" },
+    { "name": "Palantir", "handle": "PalantirTech", "aliases": ["Palantir Technologies"] },
+    { "name": "Anthropic", "handle": "AnthropicAI", "aliases": ["Anthropic AI"] },
+    { "name": "Figma", "handle": "figma" },
+    { "name": "Microsoft", "handle": "Microsoft" }
+  ],
+  "podcasts": [
+    { "name": "All-In Podcast", "handle": "theallinpod", "aliases": ["All-In", "All In", "theallinpod", "All-In Pod"] },
+    { "name": "Dwarkesh Podcast", "handle": "dwarkesh_sp", "aliases": ["Dwarkesh"] },
+    { "name": "Lex Fridman Podcast", "handle": "lexfridman", "aliases": ["Lex Fridman"] }
+  ]
+}

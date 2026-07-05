@@ -1,22 +1,28 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, Save } from "lucide-react";
-import { fetchBiases, fetchPrompt, updateBiases, updatePrompt } from "@/api/factory";
+import { fetchBiases, fetchMentions, fetchPrompt, updateBiases, updateMentions, updatePrompt } from "@/api/factory";
 import { cn } from "@/lib/utils";
 
-export function SettingsPanel() {
-  const [open, setOpen] = useState(false);
+interface SettingsPanelProps {
+  defaultOpen?: boolean;
+}
+
+export function SettingsPanel({ defaultOpen = false }: SettingsPanelProps) {
+  const [open, setOpen] = useState(defaultOpen);
   const [biases, setBiases] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [mentions, setMentions] = useState("");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<"biases" | "prompt" | null>(null);
+  const [saving, setSaving] = useState<"biases" | "prompt" | "mentions" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const [b, p] = await Promise.all([fetchBiases(), fetchPrompt()]);
+        const [b, p, m] = await Promise.all([fetchBiases(), fetchPrompt(), fetchMentions()]);
         setBiases(b.content);
         setPrompt(p.content);
+        setMentions(m.content);
       } catch {
         setMessage("Could not load settings.");
       } finally {
@@ -34,6 +40,20 @@ export function SettingsPanel() {
       setMessage("Biases saved.");
     } catch {
       setMessage("Failed to save biases.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function saveMentions() {
+    setSaving("mentions");
+    setMessage(null);
+    try {
+      JSON.parse(mentions);
+      await updateMentions(mentions);
+      setMessage("Mentions saved.");
+    } catch {
+      setMessage("Failed to save mentions — must be valid JSON.");
     } finally {
       setSaving(null);
     }
@@ -61,7 +81,7 @@ export function SettingsPanel() {
       >
         <div>
           <h3 className="font-display text-sm font-bold text-white">Lens & instructions</h3>
-          <p className="mt-0.5 text-xs text-fog">Biases and analysis prompt — evolve over time.</p>
+          <p className="mt-0.5 text-xs text-fog">Biases, prompt, and @ mention dictionary — evolve over time.</p>
         </div>
         <ChevronDown className={cn("h-4 w-4 text-fog transition", open && "rotate-180")} />
       </button>
@@ -71,7 +91,7 @@ export function SettingsPanel() {
           {loading ? (
             <p className="py-4 text-sm text-fog">Loading…</p>
           ) : (
-            <div className="mt-4 grid gap-5 lg:grid-cols-2">
+            <div className="mt-4 grid gap-5 xl:grid-cols-3">
               <div>
                 <label className="font-mono text-[10px] uppercase tracking-wider text-signal">
                   Biases
@@ -79,7 +99,7 @@ export function SettingsPanel() {
                 <textarea
                   value={biases}
                   onChange={(e) => setBiases(e.target.value)}
-                  rows={14}
+                  rows={20}
                   className="mt-2 w-full resize-y rounded-md border border-line bg-ink px-3 py-2 font-mono text-xs leading-relaxed text-fog-light focus:border-signal/50 focus:outline-none"
                 />
                 <button
@@ -99,7 +119,7 @@ export function SettingsPanel() {
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  rows={14}
+                  rows={20}
                   className="mt-2 w-full resize-y rounded-md border border-line bg-ink px-3 py-2 font-mono text-xs leading-relaxed text-fog-light focus:border-signal/50 focus:outline-none"
                 />
                 <button
@@ -110,6 +130,30 @@ export function SettingsPanel() {
                 >
                   <Save className="h-3 w-3" />
                   {saving === "prompt" ? "Saving…" : "Save prompt"}
+                </button>
+              </div>
+              <div>
+                <label className="font-mono text-[10px] uppercase tracking-wider text-signal">
+                  Mentions (@ tags)
+                </label>
+                <p className="mt-1 text-[11px] text-fog">
+                  People, companies, podcasts → X handles. Posts end with podcast @, not YouTube.
+                </p>
+                <textarea
+                  value={mentions}
+                  onChange={(e) => setMentions(e.target.value)}
+                  rows={20}
+                  spellCheck={false}
+                  className="mt-2 w-full resize-y rounded-md border border-line bg-ink px-3 py-2 font-mono text-xs leading-relaxed text-fog-light focus:border-signal/50 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={saveMentions}
+                  disabled={saving === "mentions"}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded border border-line px-3 py-1.5 text-xs text-white transition hover:border-signal/40 disabled:opacity-50"
+                >
+                  <Save className="h-3 w-3" />
+                  {saving === "mentions" ? "Saving…" : "Save mentions"}
                 </button>
               </div>
             </div>

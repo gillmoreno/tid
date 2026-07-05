@@ -41,7 +41,7 @@ func (r Runner) FetchTranscript(sourceID, url string) error {
 	return err
 }
 
-func (r Runner) Analyze(sourceID string, bias, prompt string) (AnalysisResult, error) {
+func (r Runner) Analyze(sourceID string, bias, prompt, mentions string) (AnalysisResult, error) {
 	transcriptPath := filepath.Join(r.LoopsDir, "drafts", sourceID, "transcript.txt")
 	transcript, err := os.ReadFile(transcriptPath)
 	if err != nil {
@@ -52,6 +52,7 @@ func (r Runner) Analyze(sourceID string, bias, prompt string) (AnalysisResult, e
 	payload := map[string]string{
 		"biases":     bias,
 		"prompt":     prompt,
+		"mentions":   mentions,
 		"transcript": string(transcript),
 	}
 	raw, _ := json.Marshal(payload)
@@ -100,7 +101,7 @@ func speakerPodcast(source Source) (speaker, podcast string) {
 	return speaker, podcast
 }
 
-func (r Runner) WriteCandidateDraft(source Source, c Candidate, clipPath string) error {
+func (r Runner) WriteCandidateDraft(source Source, c Candidate, clipPath string, dict MentionDictionary) error {
 	speaker, podcast := speakerPodcast(source)
 	draftDir := filepath.Join(r.LoopsDir, "drafts", c.ID)
 	if err := os.MkdirAll(draftDir, 0o755); err != nil {
@@ -111,7 +112,7 @@ func (r Runner) WriteCandidateDraft(source Source, c Candidate, clipPath string)
 	if postText == "" {
 		postText = fmt.Sprintf("%s: %s\n\n%s", speaker, c.Hook, c.Take)
 	}
-	postText = EnsurePostTextAttribution(postText, podcast, source.YouTubeURL)
+	postText = EnsurePostTextAttribution(postText, podcast, dict)
 
 	meta := map[string]any{
 		"id":          c.ID,
@@ -132,7 +133,7 @@ func (r Runner) WriteCandidateDraft(source Source, c Candidate, clipPath string)
 	return os.WriteFile(filepath.Join(draftDir, "post.txt"), []byte(postText), 0o644)
 }
 
-func (r Runner) ClipCandidate(source Source, c Candidate) (string, error) {
+func (r Runner) ClipCandidate(source Source, c Candidate, dict MentionDictionary) (string, error) {
 	_, err := r.Run(r.LoopsDir, "clip.sh",
 		"--url", source.YouTubeURL,
 		"--start", c.StartTime,
@@ -144,7 +145,7 @@ func (r Runner) ClipCandidate(source Source, c Candidate) (string, error) {
 	}
 
 	clipPath := filepath.Join("drafts", c.ID, "clip.mp4")
-	if err := r.WriteCandidateDraft(source, c, clipPath); err != nil {
+	if err := r.WriteCandidateDraft(source, c, clipPath, dict); err != nil {
 		return "", err
 	}
 	return clipPath, nil
@@ -153,4 +154,55 @@ func (r Runner) ClipCandidate(source Source, c Candidate) (string, error) {
 func (r Runner) PreparePost(candidateID string) error {
 	_, err := r.Run(r.LoopsDir, "prepare-post.sh", "--draft", candidateID)
 	return err
+}
+
+func (r Runner) RewriteCandidate(bias, mentions string, source Source, c Candidate, instruction string) (RewriteResult, error) {
+	workDir := filepath.Join(r.LoopsDir, "drafts", c.ID)
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		return RewriteResult{}, err
+	}
+
+	podcast := source.Podcast
+	if podcast == "" {
+		podcast = sourcePodcastFromPostText(c.PostText)
+	}
+	if podcast == "" {
+		podcast = "Podcast"
+	}
+
+	inputPath := filepath.Join(workDir, "rewrite-input.json")
+	podcastHandle := ParseMentionDictionary(mentions).ResolvePodcastHandle(podcast)
+	payload := map[string]string{
+		"biases":         bias,
+		"mentions":       mentions,
+		"instruction":    instruction,
+		"hook":           c.Hook,
+		"take":           c.Take,
+		"post_text":      c.PostText,
+		"podcast":        podcast,
+		"podcast_handle": podcastHandle,
+	}
+	if podcastHandle == "" {
+		payload["podcast_handle"] = "theallinpod"
+	}
+	raw, _ := json.Marshal(payload)
+	if err := os.WriteFile(inputPath, raw, 0o644); err != nil {
+		return RewriteResult{}, err
+	}
+
+	outPath := filepath.Join(workDir, "rewrite-output.json")
+	if _, err := r.Run(r.LoopsDir, "rewrite.sh", "--input", inputPath, "--out", outPath); err != nil {
+		return RewriteResult{}, err
+	}
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		return RewriteResult{}, fmt.Errorf("read rewrite output: %w", err)
+	}
+	var result RewriteResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		return RewriteResult{}, fmt.Errorf("parse rewrite output: %w", err)
+	}
+	result.PostText = EnsurePostTextAttribution(result.PostText, podcast, ParseMentionDictionary(mentions))
+	return result, nil
 }

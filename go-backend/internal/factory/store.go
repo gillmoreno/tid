@@ -44,6 +44,50 @@ func (s *Store) SeedDefaults(biasContent, promptContent string) error {
 	return nil
 }
 
+func (s *Store) SeedMentions(content string) error {
+	if strings.TrimSpace(content) == "" {
+		return fmt.Errorf("empty mentions seed")
+	}
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM mention_dictionaries`).Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		_, err := s.db.Exec(`INSERT INTO mention_dictionaries (name, content, is_active) VALUES ('default', ?, 1)`, content)
+		return err
+	}
+	return nil
+}
+
+func (s *Store) GetActiveMentions() (MentionDictionaryProfile, error) {
+	var m MentionDictionaryProfile
+	var active int
+	err := s.db.QueryRow(`
+		SELECT id, name, content, is_active, updated_at
+		FROM mention_dictionaries WHERE is_active = 1
+		ORDER BY updated_at DESC LIMIT 1`).Scan(&m.ID, &m.Name, &m.Content, &active, &m.UpdatedAt)
+	if err != nil {
+		return m, err
+	}
+	m.IsActive = active == 1
+	return m, nil
+}
+
+func (s *Store) UpdateActiveMentions(content string) (MentionDictionaryProfile, error) {
+	_, err := s.db.Exec(`UPDATE mention_dictionaries SET is_active = 0`)
+	if err != nil {
+		return MentionDictionaryProfile{}, err
+	}
+	_, err = s.db.Exec(`
+		INSERT INTO mention_dictionaries (name, content, is_active, updated_at)
+		VALUES ('default', ?, 1, datetime('now'))
+		ON CONFLICT(name) DO UPDATE SET content = excluded.content, is_active = 1, updated_at = datetime('now')`, content)
+	if err != nil {
+		return MentionDictionaryProfile{}, err
+	}
+	return s.GetActiveMentions()
+}
+
 func (s *Store) GetActiveBias() (BiasProfile, error) {
 	var b BiasProfile
 	var active int
@@ -176,11 +220,16 @@ func (s *Store) InsertCandidates(sourceID string, items []AnalysisCandidate) ([]
 	if err != nil {
 		return nil, err
 	}
+	mentions, err := s.GetActiveMentions()
+	if err != nil {
+		return nil, err
+	}
+	dict := ParseMentionDictionary(mentions.Content)
 
 	var out []Candidate
 	for i, item := range items {
 		id := fmt.Sprintf("%s-c%02d", sourceID, i+1)
-		postText := EnsurePostTextAttribution(item.PostText, src.Podcast, src.YouTubeURL)
+		postText := EnsurePostTextAttribution(item.PostText, src.Podcast, dict)
 		_, err := tx.Exec(`
 			INSERT INTO candidates (
 				id, source_id, rank, start_time, end_time, hook, take, post_text,

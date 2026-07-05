@@ -3,6 +3,7 @@ import type {
   AnalyzeResult,
   BiasProfile,
   Candidate,
+  MentionDictionaryProfile,
   PromptTemplate,
   ScheduledPost,
   SchedulerTickResult,
@@ -26,6 +27,16 @@ export async function fetchPrompt(): Promise<PromptTemplate> {
 
 export async function updatePrompt(content: string): Promise<PromptTemplate> {
   const { data } = await apiClient.put<PromptTemplate>("/factory/prompt", { content });
+  return data;
+}
+
+export async function fetchMentions(): Promise<MentionDictionaryProfile> {
+  const { data } = await apiClient.get<MentionDictionaryProfile>("/factory/mentions");
+  return data;
+}
+
+export async function updateMentions(content: string): Promise<MentionDictionaryProfile> {
+  const { data } = await apiClient.put<MentionDictionaryProfile>("/factory/mentions", { content });
   return data;
 }
 
@@ -64,6 +75,18 @@ export async function updateCandidate(
 
 export async function clipCandidate(id: string): Promise<Candidate> {
   const { data } = await apiClient.post<Candidate>(`/factory/candidates/${id}/clip`);
+  return data;
+}
+
+export async function rewriteCandidate(
+  id: string,
+  instruction: string,
+  patch?: Partial<Pick<Candidate, "hook" | "take" | "post_text">>
+): Promise<Candidate> {
+  const { data } = await apiClient.post<Candidate>(`/factory/candidates/${id}/rewrite`, {
+    instruction,
+    ...patch,
+  });
   return data;
 }
 

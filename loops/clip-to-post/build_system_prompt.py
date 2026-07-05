@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the Post Factory system prompt from biases + instructions."""
+"""Build the Post Factory system prompt from biases + instructions + mentions."""
 
 import os
 import sys
@@ -8,6 +8,7 @@ import sys
 def main() -> None:
     biases = os.environ.get("FACTORY_BIASES", "")
     prompt = os.environ.get("FACTORY_PROMPT", "")
+    mentions = os.environ.get("FACTORY_MENTIONS", "")
     if not biases or not prompt:
         print("FACTORY_BIASES and FACTORY_PROMPT required", file=sys.stderr)
         sys.exit(1)
@@ -20,6 +21,9 @@ BIASES (Gil's lens — curiosity mixed with skepticism):
 INSTRUCTIONS:
 {prompt}
 
+MENTIONS DICTIONARY (tag these @ handles when names appear — update in Post Factory settings):
+{mentions}
+
 TASK:
 Read the transcript and return ONLY valid JSON (no markdown fences) with this shape:
 {{
@@ -28,8 +32,8 @@ Read the transcript and return ONLY valid JSON (no markdown fences) with this sh
       "start_time": "HH:MM:SS",
       "end_time": "HH:MM:SS",
       "hook": "one-line punchy claim",
-      "take": "2-3 sentences of context in Gil's voice",
-      "post_text": "full post ready for X: hook line, blank line, take, blank line, Source: Podcast, blank line, YouTube URL",
+      "take": "2-4 sentences: angle for Gil, format choice, what to push",
+      "post_text": "full post ready for X with @ tags; end with podcast @ only (never YouTube URL)",
       "why_interesting": "why this moment matters",
       "confidence": 0.0
     }}
@@ -40,7 +44,10 @@ Rules:
 - Return 2 to 5 candidates
 - Each clip 30 seconds to 5 minutes
 - Accurate timestamps when possible
-- No emojis, no hashtags, no engagement bait
+- Choose Format A (essay) or Format B (quote) per clip
+- Tag people/companies from MENTIONS dictionary when referenced
+- End post_text with podcast @ handle — not a YouTube link
+- No emojis, no hashtags
 - Speaker name in hook when known"""
     print(text)
 

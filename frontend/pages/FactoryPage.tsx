@@ -91,23 +91,22 @@ export function FactoryPage() {
 
   if (error && loading) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-24 text-center">
+      <div className="w-full px-6 py-24 text-center xl:px-10">
         <p className="font-mono text-sm text-signal">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-10 pb-24">
+    <div className="w-full px-6 py-10 pb-24 xl:px-10">
       <div className="mb-8 flex items-start justify-between gap-4 border-b border-line pb-6">
         <div>
           <div className="flex items-center gap-2">
             <Factory className="h-5 w-5 text-signal" />
             <h1 className="font-display text-2xl font-bold text-white">Post Factory</h1>
           </div>
-          <p className="mt-2 max-w-xl text-sm text-fog">
-            YouTube in → biases + prompt → clip candidates + takes → schedule → prepare-post at
-            the right time.
+          <p className="mt-2 text-sm text-fog">
+            YouTube in → biases + prompt → clip candidates + takes → refine → schedule or post now.
           </p>
         </div>
       </div>
@@ -118,10 +117,11 @@ export function FactoryPage() {
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <div className="space-y-6">
+      <div className="space-y-6">
+        <SettingsPanel defaultOpen />
+
+        <div className="grid gap-6 xl:grid-cols-2">
           <IngestForm onCreated={handleSourceCreated} />
-          <SettingsPanel />
           <SourceList
             sources={sources}
             selectedId={selectedSourceId}
@@ -132,39 +132,37 @@ export function FactoryPage() {
           />
         </div>
 
-        <div className="space-y-6">
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-display text-lg font-bold text-white">Candidates</h2>
-              <span className="font-mono text-xs text-fog">{candidates.length} clips</span>
-            </div>
-
-            {loading ? (
-              <div className="h-32 animate-pulse rounded-lg bg-ink-muted" />
-            ) : candidates.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-line px-5 py-12 text-center">
-                <p className="text-sm text-fog">
-                  {selectedSourceId
-                    ? "No candidates yet. Run analyze on the source."
-                    : "Select or ingest a source to see candidates."}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {candidates.map((candidate) => (
-                  <CandidateCard
-                    key={candidate.id}
-                    candidate={candidate}
-                    onUpdated={handleCandidateUpdated}
-                    onScheduled={refreshAll}
-                  />
-                ))}
-              </div>
-            )}
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-lg font-bold text-white">Candidates</h2>
+            <span className="font-mono text-xs text-fog">{candidates.length} clips</span>
           </div>
 
-          <ScheduledQueue posts={scheduled} onTick={refreshAll} />
+          {loading ? (
+            <div className="h-32 animate-pulse rounded-lg bg-ink-muted" />
+          ) : candidates.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-line px-5 py-12 text-center">
+              <p className="text-sm text-fog">
+                {selectedSourceId
+                  ? "No candidates yet. Run analyze on the source."
+                  : "Select or ingest a source to see candidates."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {candidates.map((candidate) => (
+                <CandidateCard
+                  key={candidate.id}
+                  candidate={candidate}
+                  onUpdated={handleCandidateUpdated}
+                  onScheduled={refreshAll}
+                />
+              ))}
+            </div>
+          )}
         </div>
+
+        <ScheduledQueue posts={scheduled} onTick={refreshAll} />
       </div>
     </div>
   );

@@ -41,7 +41,12 @@ func (a *App) ClipCandidateCLI(candidateID string) error {
 	if err != nil {
 		return err
 	}
-	clipPath, err := a.runner.ClipCandidate(src, c)
+	mentions, err := a.factory.GetActiveMentions()
+	if err != nil {
+		return err
+	}
+	dict := factory.ParseMentionDictionary(mentions.Content)
+	clipPath, err := a.runner.ClipCandidate(src, c, dict)
 	if err != nil {
 		return err
 	}
