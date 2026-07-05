@@ -30,6 +30,7 @@ func (a *App) mountFactoryRoutes(r chi.Router) {
 	r.Get("/factory/candidates", a.handleListCandidates)
 	r.Get("/factory/candidates/{id}", a.handleGetCandidate)
 	r.Patch("/factory/candidates/{id}", a.handlePatchCandidate)
+	r.Delete("/factory/candidates/{id}", a.handleDeleteCandidate)
 	r.Post("/factory/candidates/{id}/clip", a.handleClipCandidate)
 	r.Post("/factory/candidates/{id}/rewrite", a.handleRewriteCandidate)
 	r.Post("/factory/candidates/{id}/post-now", a.handlePostNowCandidate)
@@ -291,6 +292,19 @@ func (a *App) handlePatchCandidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, c)
+}
+
+func (a *App) handleDeleteCandidate(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := a.factory.DeleteCandidate(id); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "candidate not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"deleted": id})
 }
 
 func (a *App) handleClipCandidate(w http.ResponseWriter, r *http.Request) {

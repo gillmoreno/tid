@@ -65,6 +65,10 @@ export async function fetchCandidates(sourceId?: string): Promise<Candidate[]> {
   return data;
 }
 
+export async function deleteCandidate(id: string): Promise<void> {
+  await apiClient.delete(`/factory/candidates/${id}`);
+}
+
 export async function updateCandidate(
   id: string,
   patch: Partial<Pick<Candidate, "hook" | "take" | "post_text" | "status">>

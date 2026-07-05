@@ -348,6 +348,21 @@ func (s *Store) GetCandidateEnriched(id string) (Candidate, error) {
 	return s.enrichCandidatePostText(c)
 }
 
+func (s *Store) DeleteCandidate(id string) error {
+	res, err := s.db.Exec(`DELETE FROM candidates WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("candidate not found")
+	}
+	return nil
+}
+
 func (s *Store) SetCandidateClip(id, clipPath string) error {
 	_, err := s.db.Exec(`
 		UPDATE candidates SET clip_path = ?, status = 'clipped', updated_at = datetime('now')

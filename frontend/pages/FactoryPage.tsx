@@ -1,18 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
-import { Factory } from "lucide-react";
-import { fetchCandidates, fetchScheduled, fetchSources } from "@/api/factory";
+import { Factory, LayoutGrid, Table2 } from "lucide-react";
+import { deleteCandidate, fetchCandidates, fetchScheduled, fetchSources } from "@/api/factory";
 import { CandidateCard } from "@/components/factory/CandidateCard";
+import { CandidatesTable } from "@/components/factory/CandidatesTable";
 import { IngestForm } from "@/components/factory/IngestForm";
 import { ScheduledQueue } from "@/components/factory/ScheduledQueue";
 import { SettingsPanel } from "@/components/factory/SettingsPanel";
 import { SourceList } from "@/components/factory/SourceList";
+import { cn } from "@/lib/utils";
 import type { Candidate, ScheduledPost, Source } from "@/types/factory";
+
+type CandidateView = "cards" | "table";
 
 export function FactoryPage() {
   const [sources, setSources] = useState<Source[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [scheduled, setScheduled] = useState<ScheduledPost[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [candidateView, setCandidateView] = useState<CandidateView>("cards");
+  const [deletingCandidateId, setDeletingCandidateId] = useState<string | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +35,7 @@ export function FactoryPage() {
   const refreshCandidates = useCallback(async (sourceId: string | null) => {
     const data = await fetchCandidates(sourceId ?? undefined);
     setCandidates(data);
+    setSelectedCandidateId((prev) => (prev && data.some((c) => c.id === prev) ? prev : null));
   }, []);
 
   const refreshScheduled = useCallback(async () => {
@@ -72,8 +80,10 @@ export function FactoryPage() {
   useEffect(() => {
     if (!selectedSourceId) {
       setCandidates([]);
+      setSelectedCandidateId(null);
       return;
     }
+    setSelectedCandidateId(null);
     refreshCandidates(selectedSourceId).catch(() => {
       setError("Failed to load candidates.");
     });
@@ -83,11 +93,29 @@ export function FactoryPage() {
     setSources((prev) => [source, ...prev]);
     setSelectedSourceId(source.id);
     setCandidates([]);
+    setSelectedCandidateId(null);
   }
 
   function handleCandidateUpdated(updated: Candidate) {
     setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   }
+
+  async function handleCandidateDeleted(id: string) {
+    setDeletingCandidateId(id);
+    try {
+      await deleteCandidate(id);
+      setCandidates((prev) => prev.filter((c) => c.id !== id));
+      setSelectedCandidateId((prev) => (prev === id ? null : prev));
+      await refreshScheduled();
+    } catch {
+      setError("Failed to remove candidate.");
+    } finally {
+      setDeletingCandidateId(null);
+    }
+  }
+
+  const selectedCandidate =
+    candidates.find((c) => c.id === selectedCandidateId) ?? null;
 
   if (error && loading) {
     return (
@@ -133,9 +161,39 @@ export function FactoryPage() {
         </div>
 
         <div>
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-lg font-bold text-white">Candidates</h2>
-            <span className="font-mono text-xs text-fog">{candidates.length} clips</span>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs text-fog">{candidates.length} clips</span>
+              <div className="flex rounded-md border border-line p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setCandidateView("cards")}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition",
+                    candidateView === "cards"
+                      ? "bg-signal/15 text-signal"
+                      : "text-fog hover:text-white"
+                  )}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCandidateView("table")}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition",
+                    candidateView === "table"
+                      ? "bg-signal/15 text-signal"
+                      : "text-fog hover:text-white"
+                  )}
+                >
+                  <Table2 className="h-3.5 w-3.5" />
+                  Table
+                </button>
+              </div>
+            </div>
           </div>
 
           {loading ? (
@@ -147,6 +205,28 @@ export function FactoryPage() {
                   ? "No candidates yet. Run analyze on the source."
                   : "Select or ingest a source to see candidates."}
               </p>
+            </div>
+          ) : candidateView === "table" ? (
+            <div className="space-y-4">
+              <CandidatesTable
+                candidates={candidates}
+                selectedId={selectedCandidateId}
+                onSelect={setSelectedCandidateId}
+                onDelete={handleCandidateDeleted}
+                deletingId={deletingCandidateId}
+              />
+              {selectedCandidate ? (
+                <CandidateCard
+                  key={selectedCandidate.id}
+                  candidate={selectedCandidate}
+                  onUpdated={handleCandidateUpdated}
+                  onScheduled={refreshAll}
+                />
+              ) : (
+                <p className="rounded-lg border border-dashed border-line px-5 py-8 text-center text-sm text-fog">
+                  Select a row to open and edit a candidate.
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
