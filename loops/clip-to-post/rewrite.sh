@@ -32,7 +32,7 @@ PODCAST_HANDLE="$(jq -r '.podcast_handle // ""' "$INPUT")"
 OUT_DIR="$(dirname "$OUT")"
 mkdir -p "$OUT_DIR"
 
-PROMPT_TEXT="$(cat <<EOF
+cat >"$OUT_DIR/prompt.txt" <<EOF
 You are the Post Factory copy editor for The Idea Guy (Gil).
 
 BIASES (Gil's lens — curiosity mixed with skepticism):
@@ -62,7 +62,9 @@ Rewrite hook, take, and post_text to follow the instruction while keeping Gil's 
 Return ONLY valid JSON (no markdown fences):
 {"hook": "...", "take": "...", "post_text": "..."}
 EOF
-)"
+
+PROMPT_TEXT="$(cat "$OUT_DIR/prompt.txt")"
+rm -f "$OUT_DIR/prompt.txt" 2>/dev/null || true
 
 if command -v grok >/dev/null 2>&1 && [[ -f "$HOME/.grok/auth.json" || -n "${XAI_API_KEY:-}" ]]; then
   grok --no-auto-update -p "$PROMPT_TEXT" --output-format plain > "$OUT_DIR/rewrite-raw.txt" 2>/dev/null || true

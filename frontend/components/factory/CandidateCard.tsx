@@ -136,8 +136,9 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
       onUpdated(updated);
       setRefineInstruction("");
       setMessage("Refined.");
-    } catch {
-      setMessage("Refine failed — is grok available?");
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || e?.message || "unknown error";
+      setMessage(`Refine failed: ${String(msg).slice(0, 120)}`);
     } finally {
       setRewriting(false);
     }
