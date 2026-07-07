@@ -91,6 +91,24 @@ export async function clipCandidate(id: string): Promise<Candidate> {
   return data;
 }
 
+export interface CandidateTranscript {
+  text: string;
+  start_time: string;
+  end_time: string;
+  available: boolean;
+  message?: string;
+}
+
+export async function fetchCandidateTranscript(
+  id: string,
+  range?: Partial<Pick<Candidate, "start_time" | "end_time">>
+): Promise<CandidateTranscript> {
+  const { data } = await apiClient.get<CandidateTranscript>(`/factory/candidates/${id}/transcript`, {
+    params: range,
+  });
+  return data;
+}
+
 export async function trimCandidate(
   id: string,
   patch: Partial<Pick<Candidate, "start_time" | "end_time">>

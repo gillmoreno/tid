@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Calendar, Film, Save, Scissors, Send, Sparkles } from "lucide-react";
 import {
   clipCandidate,
+  fetchCandidateTranscript,
   postNowCandidate,
   rewriteCandidate,
   scheduleCandidate,
@@ -71,6 +72,9 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
   const [postingNow, setPostingNow] = useState(false);
   const [rewriting, setRewriting] = useState(false);
   const [refineInstruction, setRefineInstruction] = useState("");
+  const [transcript, setTranscript] = useState("");
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
+  const [transcriptAvailable, setTranscriptAvailable] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -81,6 +85,34 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
 
   const timesChanged =
     startTime !== candidate.start_time || endTime !== candidate.end_time;
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setTranscriptLoading(true);
+      try {
+        const result = await fetchCandidateTranscript(candidate.id, {
+          start_time: startTime,
+          end_time: endTime,
+        });
+        if (cancelled) return;
+        setTranscript(result.text);
+        setTranscriptAvailable(result.available);
+      } catch {
+        if (!cancelled) {
+          setTranscript("");
+          setTranscriptAvailable(false);
+        }
+      } finally {
+        if (!cancelled) setTranscriptLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [candidate.id, startTime, endTime]);
 
   async function handleSave() {
     setSaving(true);
@@ -194,6 +226,55 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
         </div>
       </div>
 
+      <div className="mt-3 flex flex-wrap items-end gap-2 rounded-md border border-line/80 bg-ink/50 p-3">
+        <div>
+          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Start</label>
+          <input
+            type="text"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            placeholder="00:06:00"
+            className="mt-1 block w-[7.5rem] rounded-md border border-line bg-ink px-2 py-1.5 font-mono text-xs text-white focus:border-signal/50 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">End</label>
+          <input
+            type="text"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+            placeholder="00:09:20"
+            className="mt-1 block w-[7.5rem] rounded-md border border-line bg-ink px-2 py-1.5 font-mono text-xs text-white focus:border-signal/50 focus:outline-none"
+          />
+        </div>
+        <p className="pb-1.5 font-mono text-[10px] text-fog">
+          {formatClipDuration(startTime, endTime)} total
+          {timesChanged && candidate.clip_path ? " · unsaved trim" : ""}
+        </p>
+      </div>
+
+      <div className="mt-3 rounded-md border border-line/80 bg-ink/50 p-3">
+        <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Source transcript</label>
+        <p className="mt-1 text-[11px] text-fog">
+          What was actually said in this range — check relevance before editing or clipping.
+        </p>
+        <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-line bg-ink px-3 py-2">
+          {transcriptLoading ? (
+            <p className="font-mono text-[11px] text-fog">Loading transcript…</p>
+          ) : transcript ? (
+            <p className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-fog-light">
+              {transcript}
+            </p>
+          ) : (
+            <p className="font-mono text-[11px] text-fog">
+              {transcriptAvailable
+                ? "No transcript text in this range."
+                : "Timed captions unavailable for this source."}
+            </p>
+          )}
+        </div>
+      </div>
+
       <div className="mt-4 space-y-3">
         <div>
           <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Post text</label>
@@ -248,33 +329,6 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-end gap-2 rounded-md border border-line/80 bg-ink/50 p-3">
-        <div>
-          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Start</label>
-          <input
-            type="text"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            placeholder="00:06:00"
-            className="mt-1 block w-[7.5rem] rounded-md border border-line bg-ink px-2 py-1.5 font-mono text-xs text-white focus:border-signal/50 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">End</label>
-          <input
-            type="text"
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            placeholder="00:09:20"
-            className="mt-1 block w-[7.5rem] rounded-md border border-line bg-ink px-2 py-1.5 font-mono text-xs text-white focus:border-signal/50 focus:outline-none"
-          />
-        </div>
-        <p className="pb-1.5 font-mono text-[10px] text-fog">
-          {formatClipDuration(startTime, endTime)} total
-          {timesChanged && candidate.clip_path ? " · unsaved trim" : ""}
-        </p>
       </div>
 
       {candidate.clip_path && (

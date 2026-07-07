@@ -31,6 +31,7 @@ func (a *App) mountFactoryRoutes(r chi.Router) {
 
 	r.Get("/factory/candidates", a.handleListCandidates)
 	r.Get("/factory/candidates/{id}", a.handleGetCandidate)
+	r.Get("/factory/candidates/{id}/transcript", a.handleGetCandidateTranscript)
 	r.Patch("/factory/candidates/{id}", a.handlePatchCandidate)
 	r.Delete("/factory/candidates/{id}", a.handleDeleteCandidate)
 	r.Post("/factory/candidates/{id}/clip", a.handleClipCandidate)
@@ -286,6 +287,47 @@ func (a *App) handleGetCandidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, c)
+}
+
+func (a *App) handleGetCandidateTranscript(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	c, err := a.factory.GetCandidate(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "candidate not found")
+		return
+	}
+
+	start := strings.TrimSpace(r.URL.Query().Get("start_time"))
+	if start == "" {
+		start = c.StartTime
+	}
+	end := strings.TrimSpace(r.URL.Query().Get("end_time"))
+	if end == "" {
+		end = c.EndTime
+	}
+
+	text, err := factory.ExtractTranscriptSegment(a.runner.LoopsDir, c.SourceID, start, end)
+	if err != nil {
+		if strings.Contains(err.Error(), "no VTT") {
+			writeJSON(w, map[string]any{
+				"text":       "",
+				"start_time": start,
+				"end_time":   end,
+				"available":  false,
+				"message":    "No timed captions for this source. Re-analyze after captions are available.",
+			})
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, map[string]any{
+		"text":       text,
+		"start_time": start,
+		"end_time":   end,
+		"available":  true,
+	})
 }
 
 func (a *App) handlePatchCandidate(w http.ResponseWriter, r *http.Request) {
