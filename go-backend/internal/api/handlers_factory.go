@@ -306,7 +306,7 @@ func (a *App) handleGetCandidateTranscript(w http.ResponseWriter, r *http.Reques
 		end = c.EndTime
 	}
 
-	text, err := factory.ExtractTranscriptSegment(a.runner.LoopsDir, c.SourceID, start, end)
+	text, err := factory.ExtractTimestampedTranscriptSegment(a.runner.LoopsDir, c.SourceID, start, end)
 	if err != nil {
 		if strings.Contains(err.Error(), "no VTT") {
 			writeJSON(w, map[string]any{
@@ -323,10 +323,11 @@ func (a *App) handleGetCandidateTranscript(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeJSON(w, map[string]any{
-		"text":       text,
-		"start_time": start,
-		"end_time":   end,
-		"available":  true,
+		"text":        text,
+		"start_time":  start,
+		"end_time":    end,
+		"available":   true,
+		"timestamped": true,
 	})
 }
 

@@ -13,8 +13,10 @@ import {
   defaultScheduleTime,
   factoryStatusBadge,
   formatClipDuration,
+  postTranscriptMismatch,
   toRFC3339,
 } from "@/components/factory/factory-utils";
+import { TranscriptLines } from "@/components/factory/TranscriptLines";
 import type { Candidate } from "@/types/factory";
 
 const REFINE_PRESETS = [
@@ -85,6 +87,8 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
 
   const timesChanged =
     startTime !== candidate.start_time || endTime !== candidate.end_time;
+  const transcriptMismatch =
+    !transcriptLoading && transcript.length > 0 && postTranscriptMismatch(postText, transcript);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,64 +213,68 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
   }
 
   return (
-    <article className="rounded-lg border border-line bg-ink-soft p-5">
+    <article className="rounded-lg border border-line bg-ink-soft p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs text-signal">#{candidate.rank}</span>
             <span className={factoryStatusBadge(candidate.status)}>{candidate.status}</span>
-            <span className="font-mono text-[10px] text-fog">
+            <span className="font-mono text-xs text-fog">
               {formatClipDuration(startTime, endTime)} clip
             </span>
-            <span className="font-mono text-[10px] text-fog">
+            <span className="font-mono text-xs text-fog">
               {Math.round(candidate.confidence * 100)}% conf
             </span>
           </div>
-          <p className="mt-2 text-xs text-fog">{candidate.why_interesting}</p>
+          <p className="mt-2 text-sm leading-relaxed text-fog">{candidate.why_interesting}</p>
         </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-end gap-2 rounded-md border border-line/80 bg-ink/50 p-3">
         <div>
-          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Start</label>
+          <label className="font-mono text-xs uppercase tracking-wider text-fog">Start</label>
           <input
             type="text"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
             placeholder="00:06:00"
-            className="mt-1 block w-[7.5rem] rounded-md border border-line bg-ink px-2 py-1.5 font-mono text-xs text-white focus:border-signal/50 focus:outline-none"
+            className="mt-1 block w-[8.5rem] rounded-md border border-line bg-ink px-2.5 py-2 font-mono text-sm text-white focus:border-signal/50 focus:outline-none"
           />
         </div>
         <div>
-          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">End</label>
+          <label className="font-mono text-xs uppercase tracking-wider text-fog">End</label>
           <input
             type="text"
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
             placeholder="00:09:20"
-            className="mt-1 block w-[7.5rem] rounded-md border border-line bg-ink px-2 py-1.5 font-mono text-xs text-white focus:border-signal/50 focus:outline-none"
+            className="mt-1 block w-[8.5rem] rounded-md border border-line bg-ink px-2.5 py-2 font-mono text-sm text-white focus:border-signal/50 focus:outline-none"
           />
         </div>
-        <p className="pb-1.5 font-mono text-[10px] text-fog">
+        <p className="pb-2 font-mono text-xs text-fog">
           {formatClipDuration(startTime, endTime)} total
           {timesChanged && candidate.clip_path ? " · unsaved trim" : ""}
         </p>
       </div>
 
-      <div className="mt-3 rounded-md border border-line/80 bg-ink/50 p-3">
-        <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Source transcript</label>
-        <p className="mt-1 text-[11px] text-fog">
+      <div className="mt-4 rounded-md border border-line/80 bg-ink/50 p-4">
+        <label className="font-mono text-xs uppercase tracking-wider text-fog">Source transcript</label>
+        <p className="mt-1 text-sm text-fog">
           What was actually said in this range — check relevance before editing or clipping.
         </p>
-        <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-line bg-ink px-3 py-2">
+        {transcriptMismatch ? (
+          <p className="mt-2 rounded border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
+            Post text may not match this time range — the analyzer likely mixed up timestamps. Adjust
+            start/end to where the topic is actually discussed, or re-analyze the source.
+          </p>
+        ) : null}
+        <div className="mt-3 max-h-64 overflow-y-auto rounded-md border border-line bg-ink px-4 py-3">
           {transcriptLoading ? (
-            <p className="font-mono text-[11px] text-fog">Loading transcript…</p>
+            <p className="text-sm text-fog">Loading transcript…</p>
           ) : transcript ? (
-            <p className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-fog-light">
-              {transcript}
-            </p>
+            <TranscriptLines text={transcript} />
           ) : (
-            <p className="font-mono text-[11px] text-fog">
+            <p className="text-sm text-fog">
               {transcriptAvailable
                 ? "No transcript text in this range."
                 : "Timed captions unavailable for this source."}
@@ -277,18 +285,18 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
 
       <div className="mt-4 space-y-3">
         <div>
-          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Post text</label>
+          <label className="font-mono text-xs uppercase tracking-wider text-fog">Post text</label>
           <textarea
             value={postText}
             onChange={(e) => setPostText(e.target.value)}
             rows={12}
-            className="mt-1 w-full resize-y rounded-md border border-line bg-ink px-3 py-2 font-mono text-xs leading-relaxed text-fog-light focus:border-signal/50 focus:outline-none"
+            className="mt-2 w-full resize-y rounded-md border border-line bg-ink px-4 py-3 text-base leading-7 text-fog-light focus:border-signal/50 focus:outline-none"
           />
         </div>
 
         <div className="rounded-md border border-line/80 bg-ink/50 p-3">
-          <label className="font-mono text-[10px] uppercase tracking-wider text-signal">Refine</label>
-          <p className="mt-1 text-[11px] text-fog">
+          <label className="font-mono text-xs uppercase tracking-wider text-signal">Refine</label>
+          <p className="mt-1 text-sm text-fog">
             Add your angle — curiosity, skepticism, a question. Uses your biases above.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -298,7 +306,7 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
                 type="button"
                 onClick={() => handleRefine(preset.instruction)}
                 disabled={rewriting}
-                className="rounded border border-line px-2.5 py-1 text-[11px] text-fog-light transition hover:border-signal/40 hover:text-white disabled:opacity-50"
+                className="rounded border border-line px-3 py-1.5 text-sm text-fog-light transition hover:border-signal/40 hover:text-white disabled:opacity-50"
               >
                 {preset.label}
               </button>
@@ -316,7 +324,7 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
                 }
               }}
               placeholder="Custom instruction — e.g. make it about trust in Anthropic for small teams"
-              className="min-w-[240px] flex-1 rounded-md border border-line bg-ink px-3 py-2 text-xs text-white placeholder:text-fog/60 focus:border-signal/50 focus:outline-none"
+              className="min-w-[240px] flex-1 rounded-md border border-line bg-ink px-3 py-2.5 text-sm text-white placeholder:text-fog/60 focus:border-signal/50 focus:outline-none"
             />
             <button
               type="button"

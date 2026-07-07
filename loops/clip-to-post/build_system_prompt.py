@@ -41,7 +41,8 @@ Read the transcript and return ONLY valid JSON (no markdown fences) with this sh
 Rules:
 - Return 2 to 5 candidates
 - Each clip 30 seconds to 5 minutes
-- Accurate timestamps when possible
+- Transcript lines are prefixed with [HH:MM:SS] — start_time and end_time MUST bracket the lines your post_text is based on
+- post_text must only describe what is actually said between start_time and end_time (no mixing topics from other timestamps)
 - Choose Format A (essay) or Format B (quote) per clip
 - Tag people/companies from MENTIONS dictionary when referenced
 - End post_text with podcast @ handle — not a YouTube link

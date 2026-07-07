@@ -110,45 +110,45 @@ func parseVTTCues(data []byte) ([]struct {
 	return cues, nil
 }
 
-func ExtractTranscriptSegment(loopsDir, sourceID, startTime, endTime string) (string, error) {
-	startSec, err := ParseTimestamp(startTime)
-	if err != nil {
-		return "", err
-	}
-	endSec, err := ParseTimestamp(endTime)
-	if err != nil {
-		return "", err
-	}
-	if endSec <= startSec {
-		return "", fmt.Errorf("invalid time range")
-	}
+type vttCue struct {
+	start, end float64
+	text      string
+}
 
+type transcriptBucket struct {
+	start float64
+	text  string
+}
+
+func loadVTTCues(loopsDir, sourceID string) ([]vttCue, error) {
 	sourceDir := filepath.Join(loopsDir, "drafts", sourceID)
 	vttPath, err := findVTTFile(sourceDir)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	data, err := os.ReadFile(vttPath)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	cues, err := parseVTTCues(data)
+	raw, err := parseVTTCues(data)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+	cues := make([]vttCue, len(raw))
+	for i, cue := range raw {
+		cues[i] = vttCue{cue.start, cue.end, cue.text}
+	}
+	return cues, nil
+}
 
+func bucketVTTCues(cues []vttCue, rangeStart, rangeEnd float64) []transcriptBucket {
 	const minCueDuration = 0.15
 	const bucketWindow = 2.5
+	filtered := rangeEnd > rangeStart
 
-	type bucket struct {
-		start float64
-		text  string
-	}
-	var buckets []bucket
-
+	var buckets []transcriptBucket
 	for _, cue := range cues {
-		if cue.end <= startSec || cue.start >= endSec {
+		if filtered && (cue.end <= rangeStart || cue.start >= rangeEnd) {
 			continue
 		}
 		if cue.end-cue.start < minCueDuration {
@@ -159,7 +159,7 @@ func ExtractTranscriptSegment(loopsDir, sourceID, startTime, endTime string) (st
 			continue
 		}
 		if len(buckets) == 0 || cue.start-buckets[len(buckets)-1].start > bucketWindow {
-			buckets = append(buckets, bucket{cue.start, text})
+			buckets = append(buckets, transcriptBucket{cue.start, text})
 			continue
 		}
 		last := buckets[len(buckets)-1]
@@ -167,16 +167,127 @@ func ExtractTranscriptSegment(loopsDir, sourceID, startTime, endTime string) (st
 			buckets[len(buckets)-1].text = text
 		}
 	}
+	return buckets
+}
 
+func mergeTranscriptBuckets(buckets []transcriptBucket) string {
 	if len(buckets) == 0 {
-		return "", nil
+		return ""
 	}
-
 	combined := buckets[0].text
 	for _, b := range buckets[1:] {
 		combined = mergeCaptionOverlap(combined, b.text)
 	}
-	return combined, nil
+	return combined
+}
+
+func transcriptSegmentBuckets(loopsDir, sourceID, startTime, endTime string) ([]transcriptBucket, error) {
+	startSec, err := ParseTimestamp(startTime)
+	if err != nil {
+		return nil, err
+	}
+	endSec, err := ParseTimestamp(endTime)
+	if err != nil {
+		return nil, err
+	}
+	if endSec <= startSec {
+		return nil, fmt.Errorf("invalid time range")
+	}
+
+	cues, err := loadVTTCues(loopsDir, sourceID)
+	if err != nil {
+		return nil, err
+	}
+	return bucketVTTCues(cues, startSec, endSec), nil
+}
+
+func ExtractTranscriptSegment(loopsDir, sourceID, startTime, endTime string) (string, error) {
+	buckets, err := transcriptSegmentBuckets(loopsDir, sourceID, startTime, endTime)
+	if err != nil {
+		return "", err
+	}
+	if len(buckets) == 0 {
+		return "", nil
+	}
+	return mergeTranscriptBuckets(buckets), nil
+}
+
+// ExtractTimestampedTranscriptSegment returns [HH:MM:SS] lines for a clip range.
+func ExtractTimestampedTranscriptSegment(loopsDir, sourceID, startTime, endTime string) (string, error) {
+	buckets, err := transcriptSegmentBuckets(loopsDir, sourceID, startTime, endTime)
+	if err != nil {
+		return "", err
+	}
+	if len(buckets) == 0 {
+		return "", nil
+	}
+
+	var lines []string
+	var rolling string
+	for _, b := range buckets {
+		text := b.text
+		if rolling != "" {
+			if strings.Contains(rolling, text) {
+				continue
+			}
+			if strings.Contains(text, rolling) || strings.HasPrefix(text, rolling) {
+				rolling = text
+				if len(lines) > 0 {
+					lines[len(lines)-1] = fmt.Sprintf("[%s] %s", FormatTimestamp(b.start), text)
+				}
+				continue
+			}
+		}
+		rolling = text
+		lines = append(lines, fmt.Sprintf("[%s] %s", FormatTimestamp(b.start), text))
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+// ExportTimestampedTranscript formats VTT cues as [HH:MM:SS] lines for the analyzer.
+func ExportTimestampedTranscript(loopsDir, sourceID string) (string, error) {
+	cues, err := loadVTTCues(loopsDir, sourceID)
+	if err != nil {
+		return "", err
+	}
+	buckets := bucketVTTCues(cues, 0, 0)
+	if len(buckets) == 0 {
+		return "", fmt.Errorf("empty VTT transcript")
+	}
+
+	var lines []string
+	var rolling string
+	for _, b := range buckets {
+		text := b.text
+		if rolling != "" {
+			if strings.Contains(rolling, text) {
+				continue
+			}
+			if strings.Contains(text, rolling) || strings.HasPrefix(text, rolling) {
+				rolling = text
+				if len(lines) > 0 {
+					lines[len(lines)-1] = fmt.Sprintf("[%s] %s", FormatTimestamp(b.start), text)
+				}
+				continue
+			}
+		}
+		rolling = text
+		lines = append(lines, fmt.Sprintf("[%s] %s", FormatTimestamp(b.start), text))
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+// TranscriptForAnalyze prefers timestamped VTT export; falls back to plain transcript.txt.
+func TranscriptForAnalyze(loopsDir, sourceID string) (string, error) {
+	if stamped, err := ExportTimestampedTranscript(loopsDir, sourceID); err == nil && strings.TrimSpace(stamped) != "" {
+		return stamped, nil
+	}
+	transcriptPath := filepath.Join(loopsDir, "drafts", sourceID, "transcript.txt")
+	data, err := os.ReadFile(transcriptPath)
+	if err != nil {
+		return "", fmt.Errorf("read transcript: %w", err)
+	}
+	return string(data), nil
 }
 
 func mergeCaptionOverlap(left, right string) string {

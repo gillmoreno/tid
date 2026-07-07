@@ -42,10 +42,9 @@ func (r Runner) FetchTranscript(sourceID, url string) error {
 }
 
 func (r Runner) Analyze(sourceID string, bias, prompt, mentions string) (AnalysisResult, error) {
-	transcriptPath := filepath.Join(r.LoopsDir, "drafts", sourceID, "transcript.txt")
-	transcript, err := os.ReadFile(transcriptPath)
+	transcript, err := TranscriptForAnalyze(r.LoopsDir, sourceID)
 	if err != nil {
-		return AnalysisResult{}, fmt.Errorf("read transcript: %w", err)
+		return AnalysisResult{}, err
 	}
 
 	inputPath := filepath.Join(r.LoopsDir, "drafts", sourceID, "analyze-input.json")
@@ -53,7 +52,7 @@ func (r Runner) Analyze(sourceID string, bias, prompt, mentions string) (Analysi
 		"biases":     bias,
 		"prompt":     prompt,
 		"mentions":   mentions,
-		"transcript": string(transcript),
+		"transcript": transcript,
 	}
 	raw, _ := json.Marshal(payload)
 	if err := os.WriteFile(inputPath, raw, 0o644); err != nil {

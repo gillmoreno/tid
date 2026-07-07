@@ -55,6 +55,35 @@ export function parseTimestamp(s: string): number {
   return 0;
 }
 
+const POST_STOP_WORDS = new Set([
+  "about", "after", "also", "been", "from", "have", "into", "just", "like", "more", "that",
+  "their", "them", "then", "this", "what", "when", "will", "with", "your",
+]);
+
+export function stripTranscriptTimestamps(transcript: string): string {
+  return transcript.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/gm, "");
+}
+
+export function postTranscriptMismatch(postText: string, transcript: string): boolean {
+  if (!postText.trim() || !transcript.trim()) return false;
+
+  const terms = new Set<string>();
+  for (const match of postText.matchAll(/@([A-Za-z][A-Za-z0-9_]+)|\b[A-Z][A-Za-z]+(?:'s)?\b/g)) {
+    const term = match[0].replace(/^@/, "").toLowerCase();
+    if (term.length < 3 || POST_STOP_WORDS.has(term)) continue;
+    terms.add(term);
+  }
+
+  if (terms.size === 0) return false;
+
+  const haystack = stripTranscriptTimestamps(transcript).toLowerCase();
+  let hits = 0;
+  for (const term of terms) {
+    if (haystack.includes(term)) hits += 1;
+  }
+  return hits < Math.ceil(terms.size * 0.4);
+}
+
 export function formatClipDuration(start: string, end: string): string {
   const seconds = Math.max(0, Math.round(parseTimestamp(end) - parseTimestamp(start)));
   const m = Math.floor(seconds / 60);

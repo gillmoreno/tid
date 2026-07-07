@@ -40,11 +40,61 @@ if [[ ! -f "$VTT" ]]; then
 fi
 
 if [[ -n "$VTT" && -f "$VTT" ]]; then
-  awk '
-    /-->/ { next }
-    { gsub(/<[^>]*>/, "") }
-    length($0) > 3 && $0 !~ /^[0-9]/ && $0 !~ /^WEBVTT/ && $0 !~ /^Kind:/ && $0 !~ /^Language:/ { print }
-  ' "$VTT" | awk '!seen[$0]++' > "$OUT_DIR/$ID/transcript.txt"
+  python3 - "$VTT" "$OUT_DIR/$ID/transcript.txt" <<'PY'
+import re, sys
+vtt_path, out_path = sys.argv[1], sys.argv[2]
+ts_re = re.compile(r"^(\d{2}:\d{2}:\d{2})\.\d{3}\s+-->\s+(\d{2}:\d{2}:\d{2})\.\d{3}")
+tag_re = re.compile(r"<[^>]+>")
+lines = open(vtt_path, encoding="utf-8", errors="ignore").read().splitlines()
+current_start = None
+current_end = 0.0
+text_lines = []
+buckets = []
+
+def flush():
+    global text_lines, current_start, current_end
+    if not text_lines or current_start is None:
+        text_lines = []
+        return
+    text = tag_re.sub("", " ".join(text_lines))
+    text = text.replace("&gt;", ">").replace("&lt;", "<").replace("&amp;", "&").strip()
+    text_lines = []
+    if len(text) < 3:
+        return
+    if buckets and current_start - buckets[-1][0] <= 2.5:
+        if len(text) > len(buckets[-1][1]):
+            buckets[-1] = (buckets[-1][0], text)
+    else:
+        buckets.append((current_start, text))
+
+for line in lines:
+    line = line.strip()
+    if not line or line.startswith("WEBVTT") or line.startswith("Kind:") or line.startswith("Language:"):
+        continue
+    m = ts_re.match(line)
+    if m:
+        flush()
+        h, mi, s = map(int, m.group(1).split(":"))
+        current_start = h * 3600 + mi * 60 + s
+        eh, emi, es = map(int, m.group(2).split(":"))
+        current_end = eh * 3600 + emi * 60 + es
+        continue
+    if "-->" in line or line.startswith("align:") or line.startswith("position:"):
+        continue
+    if current_end - (current_start or 0) < 0.15:
+        continue
+    text_lines.append(line)
+flush()
+
+def fmt(sec):
+    h = sec // 3600
+    m = (sec % 3600) // 60
+    s = sec % 60
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+out = [f"[{fmt(start)}] {text}" for start, text in buckets]
+open(out_path, "w", encoding="utf-8").write("\n".join(out) + ("\n" if out else ""))
+PY
   echo "Transcript saved: $OUT_DIR/$ID/transcript.txt"
 else
   echo "No captions found. Add transcript manually or use whisper."
