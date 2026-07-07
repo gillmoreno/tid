@@ -30,34 +30,40 @@ PODCAST_HANDLE="$(jq -r '.podcast_handle // ""' "$INPUT")"
 OUT_DIR="$(dirname "$OUT")"
 mkdir -p "$OUT_DIR"
 
-PROMPT_TEXT="$(cat <<EOF
-You are the Post Factory copy editor for The Idea Guy (Gil).
+PROMPT_FILE="$OUT_DIR/rewrite-prompt.txt"
+python3 - "$INPUT" "$PROMPT_FILE" <<'PY'
+import json, sys
+
+inp = json.load(open(sys.argv[1]))
+handle = inp.get("podcast_handle") or "theallinpod"
+prompt = f"""You are the Post Factory copy editor for The Idea Guy (Gil).
 
 BIASES (Gil's lens — curiosity mixed with skepticism):
-${BIASES}
+{inp.get('biases', '')}
 
 MENTIONS DICTIONARY (tag @ handles when names appear):
-${MENTIONS}
+{inp.get('mentions', '')}
 
 INSTRUCTION:
-${INSTRUCTION}
+{inp.get('instruction', '')}
 
 CURRENT POST TEXT:
-${POST_TEXT}
+{inp.get('post_text', '')}
 
 TASK:
 Rewrite post_text to follow the instruction while keeping Gil's voice.
 - Stay faithful to the underlying claim — do not invent facts
 - Direct tone. No emojis. No hashtags. No engagement bait
 - Tag people/companies from MENTIONS dictionary with @ handles when referenced
-- post_text ends with podcast @ only: @${PODCAST_HANDLE:-theallinpod} — never a YouTube URL
+- post_text ends with podcast @ only: @{handle} — never a YouTube URL
 - Format A (essay beats) or Format B (tight quote) per instruction
 - Elicit curiosity; skeptical-curious, not cynical
 
 Return ONLY valid JSON (no markdown fences):
-{"post_text": "..."}
-EOF
-)"
+{{"post_text": "..."}}"""
+open(sys.argv[2], "w", encoding="utf-8").write(prompt)
+PY
+PROMPT_TEXT="$(<"$PROMPT_FILE")"
 
 if command -v grok >/dev/null 2>&1 && [[ -f "$HOME/.grok/auth.json" || -n "${XAI_API_KEY:-}" ]]; then
   grok --no-auto-update -p "$PROMPT_TEXT" --output-format plain > "$OUT_DIR/rewrite-raw.txt" 2>/dev/null || true

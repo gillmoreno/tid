@@ -35,10 +35,11 @@ export FACTORY_MENTIONS="$MENTIONS"
 SYSTEM_PROMPT="$(python3 "$SCRIPT_DIR/build_system_prompt.py")"
 
 if command -v grok >/dev/null 2>&1 && [[ -f "$HOME/.grok/auth.json" || -n "${XAI_API_KEY:-}" ]]; then
+  PREPARED_TRANSCRIPT="$(printf '%s' "$TRANSCRIPT" | python3 "$SCRIPT_DIR/prepare_analyze_transcript.py")"
   PROMPT_TEXT="${SYSTEM_PROMPT}
 
-TRANSCRIPT (truncated to 12000 chars):
-${TRANSCRIPT:0:12000}"
+TRANSCRIPT (timestamped, sampled across full episode when long):
+${PREPARED_TRANSCRIPT}"
 
   grok --no-auto-update -p "$PROMPT_TEXT" --output-format plain > "$OUT_DIR/analyze-raw.txt" 2>/dev/null || true
   if [[ -s "$OUT_DIR/analyze-raw.txt" ]]; then

@@ -2,9 +2,17 @@
 
 **Lens:** curiosity + skepticism. Not hype. Not cynicism for its own sake. **Boldness matters** — we need eyeballs, but earn them with proof, not slop.
 
+## Priority topics (weight heavily)
+
+- **AI** — models, agents, labs, scaling laws, timelines, who's ahead
+- **Compute** — chips, infrastructure, Moore's Law, the stack, capex
+- **Money** — markets, venture, valuations, unit economics, winners and losers
+- **Pragmatic insight** — mechanisms, tradeoffs, numbers, what operators should actually do
+
 ## What I find interesting
 
 - Claims about what will **actually change** in the world (specific, falsifiable)
+- **Wild, bold, attention-catching** takes — if backed by reasoning or a vivid story
 - Contrarian takes that survive basic scrutiny
 - Moments where a smart person says something **concrete / pragmatic / useful** — a mechanism, a tradeoff, a number
 - AI / tech / building / markets / geopolitics when tied to **actionable insight**

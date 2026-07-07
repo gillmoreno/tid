@@ -39,10 +39,13 @@ Read the transcript and return ONLY valid JSON (no markdown fences) with this sh
 }}
 
 Rules:
-- Return 2 to 5 candidates
+- Return 3 to 7 candidates when the episode has enough strong moments — do not default to exactly 3
+- Spread candidates across the FULL episode (opening, middle, late) — never mine only the first 5–10 minutes
+- Prioritize AI, compute, money/markets, and pragmatic builder insight; bold attention-catching clips beat safe summaries
 - Each clip 30 seconds to 5 minutes
 - Transcript lines are prefixed with [HH:MM:SS] — start_time and end_time MUST bracket the lines your post_text is based on
 - post_text must only describe what is actually said between start_time and end_time (no mixing topics from other timestamps)
+- Segment markers like [--- segment N/8 ---] show episode coverage — use later segments, not just the opening
 - Choose Format A (essay) or Format B (quote) per clip
 - Tag people/companies from MENTIONS dictionary when referenced
 - End post_text with podcast @ handle — not a YouTube link
