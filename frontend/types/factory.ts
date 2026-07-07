@@ -71,3 +71,21 @@ export interface AnalyzeResult {
 export interface SchedulerTickResult {
   prepared: string[];
 }
+
+export type IdeaKind = "glossary" | "essay" | "x_article" | "thread";
+export type IdeaStatus = "idea" | "drafting" | "ready" | "published";
+
+export interface Idea {
+  id: string;
+  title: string;
+  slug: string;
+  kind: IdeaKind;
+  status: IdeaStatus;
+  summary: string;
+  body: string;
+  x_post: string;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  published_at?: string;
+}

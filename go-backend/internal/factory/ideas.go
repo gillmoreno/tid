@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -23,8 +22,6 @@ type Idea struct {
 	UpdatedAt   string   `json:"updated_at"`
 	PublishedAt *string  `json:"published_at,omitempty"`
 }
-
-var slugSanitizer = regexp.MustCompile(`[^a-z0-9]+`)
 
 func Slugify(title string) string {
 	s := strings.ToLower(strings.TrimSpace(title))
@@ -173,43 +170,8 @@ func (s *Store) CreateIdea(input Idea) (Idea, error) {
 	return s.GetIdea(id)
 }
 
-func (s *Store) UpdateIdea(id string, patch Idea) (Idea, error) {
-	current, err := s.GetIdea(id)
-	if err != nil {
-		return Idea{}, err
-	}
-
-	title := strings.TrimSpace(patch.Title)
-	if title == "" {
-		title = current.Title
-	}
-	summary := patch.Summary
-	if patch.Summary == "" && patch.Title == "" {
-		summary = current.Summary
-	}
-	body := patch.Body
-	if patch.Body == "" && patch.Title == "" && patch.Summary == "" {
-		body = current.Body
-	}
-	xPost := patch.XPost
-	if patch.XPost == "" && patch.Body == "" && patch.Summary == "" && patch.Title == "" {
-		xPost = current.XPost
-	}
-
-	kind := strings.TrimSpace(patch.Kind)
-	if kind == "" {
-		kind = current.Kind
-	}
-	status := strings.TrimSpace(patch.Status)
-	if status == "" {
-		status = current.Status
-	}
-	tags := patch.Tags
-	if tags == nil {
-		tags = current.Tags
-	}
-
-	_, err = s.db.Exec(`
+func (s *Store) UpdateIdea(id string, idea Idea) (Idea, error) {
+	_, err := s.db.Exec(`
 		UPDATE ideas SET
 			title = ?,
 			kind = ?,
@@ -220,7 +182,14 @@ func (s *Store) UpdateIdea(id string, patch Idea) (Idea, error) {
 			tags = ?,
 			updated_at = datetime('now')
 		WHERE id = ?`,
-		title, kind, status, summary, body, xPost, encodeTags(tags), id,
+		strings.TrimSpace(idea.Title),
+		strings.TrimSpace(idea.Kind),
+		strings.TrimSpace(idea.Status),
+		idea.Summary,
+		idea.Body,
+		idea.XPost,
+		encodeTags(idea.Tags),
+		id,
 	)
 	if err != nil {
 		return Idea{}, err

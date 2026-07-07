@@ -5,6 +5,7 @@ import { HomePage } from "@/pages/HomePage";
 import { SectionPage } from "@/pages/SectionPage";
 import { ItemPage } from "@/pages/ItemPage";
 import { FactoryPage } from "@/pages/FactoryPage";
+import { IdeasPage } from "@/pages/IdeasPage";
 
 export const router = createBrowserRouter([
   {
@@ -15,7 +16,10 @@ export const router = createBrowserRouter([
       { path: "sections/:slug", element: <SectionPage /> },
       { path: "ideas/:slug", element: <ItemPage /> },
       ...(factoryEnabled
-        ? [{ path: "factory", element: <FactoryPage /> }]
+        ? [
+            { path: "factory", element: <FactoryPage /> },
+            { path: "factory/ideas", element: <IdeasPage /> },
+          ]
         : [{ path: "factory", element: <Navigate to="/" replace /> }]),
     ],
   },

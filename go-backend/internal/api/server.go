@@ -28,6 +28,9 @@ func NewApp(cfg config.Config, logger *log.Logger) (*App, error) {
 	if err := seedFactoryStore(store, cfg.RepoRoot); err != nil {
 		logger.Printf("factory seed warning: %v", err)
 	}
+	if err := store.SeedIdeas(); err != nil {
+		logger.Printf("ideas seed warning: %v", err)
+	}
 	app := &App{
 		cfg:     cfg,
 		logger:  logger,

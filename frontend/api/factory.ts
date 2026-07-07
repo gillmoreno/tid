@@ -6,6 +6,7 @@ import type {
   MentionDictionaryProfile,
   PodcastOption,
   PromptTemplate,
+  Idea,
   ScheduledPost,
   SchedulerTickResult,
   Source,
@@ -152,4 +153,31 @@ export async function fetchScheduled(): Promise<ScheduledPost[]> {
 export async function tickScheduler(): Promise<SchedulerTickResult> {
   const { data } = await apiClient.post<SchedulerTickResult>("/factory/scheduler/tick");
   return data;
+}
+
+export async function fetchIdeas(): Promise<Idea[]> {
+  const { data } = await apiClient.get<Idea[]>("/factory/ideas");
+  return data;
+}
+
+export async function createIdea(input: {
+  title: string;
+  kind?: Idea["kind"];
+  summary?: string;
+  tags?: string[];
+}): Promise<Idea> {
+  const { data } = await apiClient.post<Idea>("/factory/ideas", input);
+  return data;
+}
+
+export async function updateIdea(
+  id: string,
+  patch: Partial<Pick<Idea, "title" | "kind" | "status" | "summary" | "body" | "x_post" | "tags">>
+): Promise<Idea> {
+  const { data } = await apiClient.patch<Idea>(`/factory/ideas/${id}`, patch);
+  return data;
+}
+
+export async function deleteIdea(id: string): Promise<void> {
+  await apiClient.delete(`/factory/ideas/${id}`);
 }

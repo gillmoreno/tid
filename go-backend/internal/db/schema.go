@@ -63,4 +63,21 @@ CREATE TABLE IF NOT EXISTS scheduled_posts (
 
 CREATE INDEX IF NOT EXISTS idx_candidates_source ON candidates(source_id);
 CREATE INDEX IF NOT EXISTS idx_scheduled_at ON scheduled_posts(scheduled_at, status);
+
+CREATE TABLE IF NOT EXISTS ideas (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL DEFAULT 'essay',
+  status TEXT NOT NULL DEFAULT 'idea',
+  summary TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  x_post TEXT NOT NULL DEFAULT '',
+  tags TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  published_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_ideas_status ON ideas(status, updated_at DESC);
 `

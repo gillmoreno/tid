@@ -42,6 +42,8 @@ func (a *App) mountFactoryRoutes(r chi.Router) {
 
 	r.Get("/factory/scheduled", a.handleListScheduled)
 	r.Post("/factory/scheduler/tick", a.handleSchedulerTick)
+
+	a.mountIdeaRoutes(r)
 }
 
 func (a *App) handleGetBiases(w http.ResponseWriter, _ *http.Request) {
