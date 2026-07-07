@@ -2,7 +2,7 @@
 # run-factory.sh — agent entry point: YouTube URL → SQLite candidates → /factory UI
 #
 # Usage:
-#   ./run-factory.sh --url "https://youtube.com/watch?v=..." [--title "Guest"] [--podcast "Show"]
+#   ./run-factory.sh --url "https://youtube.com/watch?v=..." --podcast "All-In Podcast"
 #
 # Requires: just dev (or Go API on :8080), jq, curl
 
@@ -14,13 +14,11 @@ API="${FACTORY_API_URL:-http://localhost:8080/api/factory}"
 FRONTEND="${FACTORY_UI_URL:-http://localhost:5180/factory}"
 
 URL=""
-TITLE=""
 PODCAST=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --url) URL="$2"; shift 2 ;;
-    --title) TITLE="$2"; shift 2 ;;
     --podcast) PODCAST="$2"; shift 2 ;;
     -h|--help)
       sed -n '2,6p' "$0"
@@ -31,6 +29,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$URL" ]] || { echo "Missing --url" >&2; exit 1; }
+[[ -n "$PODCAST" ]] || { echo "Missing --podcast (must match mentions dictionary, e.g. \"All-In Podcast\")" >&2; exit 1; }
 
 require_api() {
   if ! curl -sf "$API/biases" >/dev/null 2>&1; then
@@ -43,8 +42,8 @@ require_api() {
 require_api
 
 echo "→ Ingesting source"
-INGEST_BODY="$(jq -n --arg u "$URL" --arg t "$TITLE" --arg p "$PODCAST" \
-  '{youtube_url: $u, title: $t, podcast: $p}')"
+INGEST_BODY="$(jq -n --arg u "$URL" --arg p "$PODCAST" \
+  '{youtube_url: $u, podcast: $p}')"
 SOURCE_JSON="$(curl -sf -X POST "$API/sources" -H "Content-Type: application/json" -d "$INGEST_BODY")"
 SOURCE_ID="$(echo "$SOURCE_JSON" | jq -r '.id')"
 echo "  source: $SOURCE_ID"
@@ -60,10 +59,10 @@ echo "  UI:      $FRONTEND"
 echo "  source:  $SOURCE_ID"
 echo "  db:      ${DATABASE_PATH:-$ROOT/data/factory/tid.db}"
 echo ""
-echo "Gil: open the UI, edit takes, clip, schedule. At post time: Tick now or just factory-tick."
+echo "Gil: open the UI, edit post text, clip, schedule. At post time: Tick now or just factory-tick."
 
 if [[ "$COUNT" -gt 0 ]]; then
   echo ""
   echo "Candidates:"
-  echo "$ANALYZE_JSON" | jq -r '.candidates[] | "  [\(.rank)] \(.hook) (\(.start_time)–\(.end_time))"'
+  echo "$ANALYZE_JSON" | jq -r '.candidates[] | "  [\(.rank)] \(.post_text | split("\n")[0]) (\(.start_time)–\(.end_time))"'
 fi

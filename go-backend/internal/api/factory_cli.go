@@ -27,24 +27,12 @@ func (a *App) AnalyzeSourceCLI(sourceID string) ([]factory.Candidate, error) {
 }
 
 func (a *App) ClipCandidateCLI(candidateID string) error {
-	c, err := a.factory.GetCandidate(candidateID)
-	if err != nil {
-		return err
-	}
-	src, err := a.factory.GetSource(c.SourceID)
-	if err != nil {
-		return err
-	}
-	mentions, err := a.factory.GetActiveMentions()
-	if err != nil {
-		return err
-	}
-	dict := factory.ParseMentionDictionary(mentions.Content)
-	clipPath, err := a.runner.ClipCandidate(src, c, dict)
-	if err != nil {
-		return err
-	}
-	return a.factory.SetCandidateClip(candidateID, clipPath)
+	_, err := a.runClipCandidate(candidateID)
+	return err
+}
+
+func (a *App) TrimCandidateCLI(candidateID, startTime, endTime string) (factory.Candidate, error) {
+	return a.runTrimCandidate(candidateID, startTime, endTime)
 }
 
 func (a *App) ScheduleCandidateCLI(candidateID string, at time.Time) (factory.ScheduledPost, error) {

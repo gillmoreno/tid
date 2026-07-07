@@ -122,6 +122,56 @@ func (r Runner) WriteCandidateDraft(source Source, c Candidate, clipPath string,
 	return os.WriteFile(filepath.Join(draftDir, "post.txt"), []byte(postText), 0o644)
 }
 
+func (r Runner) TrimCandidate(source Source, c Candidate, oldStart, oldEnd string, dict MentionDictionary) (string, error) {
+	clipPath := filepath.Join(r.LoopsDir, "drafts", c.ID, "clip.mp4")
+	if _, err := os.Stat(clipPath); err != nil {
+		return r.ClipCandidate(source, c, dict)
+	}
+
+	oldStartSec, err := ParseTimestamp(oldStart)
+	if err != nil {
+		return "", err
+	}
+	newStartSec, err := ParseTimestamp(c.StartTime)
+	if err != nil {
+		return "", err
+	}
+	newEndSec, err := ParseTimestamp(c.EndTime)
+	if err != nil {
+		return "", err
+	}
+
+	offset := newStartSec - oldStartSec
+	duration := newEndSec - newStartSec
+	if offset < 0 || duration <= 0 {
+		return "", fmt.Errorf("invalid trim range: %s → %s", c.StartTime, c.EndTime)
+	}
+
+	tmpPath := clipPath + ".trim.mp4"
+	cmd := exec.Command("ffmpeg",
+		"-ss", fmt.Sprintf("%.3f", offset),
+		"-i", clipPath,
+		"-t", fmt.Sprintf("%.3f", duration),
+		"-c:v", "libx264", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+		tmpPath, "-y")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", fmt.Errorf("ffmpeg trim: %w\n%s", err, stderr.String())
+	}
+	if err := os.Rename(tmpPath, clipPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", err
+	}
+
+	relPath := filepath.Join("drafts", c.ID, "clip.mp4")
+	if err := r.WriteCandidateDraft(source, c, relPath, dict); err != nil {
+		return "", err
+	}
+	return relPath, nil
+}
+
 func (r Runner) ClipCandidate(source Source, c Candidate, dict MentionDictionary) (string, error) {
 	_, err := r.Run(r.LoopsDir, "clip.sh",
 		"--url", source.YouTubeURL,

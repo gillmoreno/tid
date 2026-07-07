@@ -17,7 +17,7 @@ When Gil gives you a **YouTube podcast URL** to turn into clip candidates + post
 
 2. **Run the factory loop** from repo root:
    ```bash
-   ./loops/clip-to-post/run-factory.sh --url "YOUTUBE_URL" [--title "Speaker"] [--podcast "Show Name"]
+   ./loops/clip-to-post/run-factory.sh --url "YOUTUBE_URL" --podcast "All-In Podcast"
    ```
 
 3. **Tell Gil** to open http://localhost:5180/factory — candidates are in SQLite and the UI. He edits, clips, schedules there.
@@ -36,7 +36,7 @@ When Gil gives you a **YouTube podcast URL** to turn into clip candidates + post
 ### Factory CLI (same DB as UI)
 
 ```bash
-just factory ingest  --url URL [--title T] [--podcast P]
+just factory ingest  --url URL --podcast "All-In Podcast"
 just factory analyze --source SOURCE_ID
 just factory clip    --candidate CANDIDATE_ID
 just factory schedule --candidate ID --at 2026-07-04T16:00:00-07:00

@@ -5,11 +5,13 @@ import {
   postNowCandidate,
   rewriteCandidate,
   scheduleCandidate,
+  trimCandidate,
   updateCandidate,
 } from "@/api/factory";
 import {
   defaultScheduleTime,
   factoryStatusBadge,
+  formatClipDuration,
   toRFC3339,
 } from "@/components/factory/factory-utils";
 import type { Candidate } from "@/types/factory";
@@ -61,7 +63,10 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
   const [postText, setPostText] = useState(candidate.post_text);
   const [scheduleAt, setScheduleAt] = useState(defaultScheduleTime());
   const [saving, setSaving] = useState(false);
+  const [startTime, setStartTime] = useState(candidate.start_time);
+  const [endTime, setEndTime] = useState(candidate.end_time);
   const [clipping, setClipping] = useState(false);
+  const [trimming, setTrimming] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [postingNow, setPostingNow] = useState(false);
   const [rewriting, setRewriting] = useState(false);
@@ -70,7 +75,12 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
 
   useEffect(() => {
     setPostText(candidate.post_text);
+    setStartTime(candidate.start_time);
+    setEndTime(candidate.end_time);
   }, [candidate]);
+
+  const timesChanged =
+    startTime !== candidate.start_time || endTime !== candidate.end_time;
 
   async function handleSave() {
     setSaving(true);
@@ -97,6 +107,23 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
       setMessage("Clip failed.");
     } finally {
       setClipping(false);
+    }
+  }
+
+  async function handleTrim() {
+    setTrimming(true);
+    setMessage(null);
+    try {
+      const updated = await trimCandidate(candidate.id, {
+        start_time: startTime,
+        end_time: endTime,
+      });
+      onUpdated(updated);
+      setMessage(`Trimmed to ${formatClipDuration(updated.start_time, updated.end_time)}.`);
+    } catch {
+      setMessage("Trim failed.");
+    } finally {
+      setTrimming(false);
     }
   }
 
@@ -157,7 +184,7 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
             <span className="font-mono text-xs text-signal">#{candidate.rank}</span>
             <span className={factoryStatusBadge(candidate.status)}>{candidate.status}</span>
             <span className="font-mono text-[10px] text-fog">
-              {candidate.start_time} → {candidate.end_time}
+              {formatClipDuration(startTime, endTime)} clip
             </span>
             <span className="font-mono text-[10px] text-fog">
               {Math.round(candidate.confidence * 100)}% conf
@@ -223,8 +250,35 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
         </div>
       </div>
 
+      <div className="mt-3 flex flex-wrap items-end gap-2 rounded-md border border-line/80 bg-ink/50 p-3">
+        <div>
+          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">Start</label>
+          <input
+            type="text"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            placeholder="00:06:00"
+            className="mt-1 block w-[7.5rem] rounded-md border border-line bg-ink px-2 py-1.5 font-mono text-xs text-white focus:border-signal/50 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="font-mono text-[10px] uppercase tracking-wider text-fog">End</label>
+          <input
+            type="text"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+            placeholder="00:09:20"
+            className="mt-1 block w-[7.5rem] rounded-md border border-line bg-ink px-2 py-1.5 font-mono text-xs text-white focus:border-signal/50 focus:outline-none"
+          />
+        </div>
+        <p className="pb-1.5 font-mono text-[10px] text-fog">
+          {formatClipDuration(startTime, endTime)} total
+          {timesChanged && candidate.clip_path ? " · unsaved trim" : ""}
+        </p>
+      </div>
+
       {candidate.clip_path && (
-        <p className="mt-3 truncate font-mono text-[10px] text-emerald-400">{candidate.clip_path}</p>
+        <p className="mt-2 truncate font-mono text-[10px] text-emerald-400">{candidate.clip_path}</p>
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4">
@@ -237,14 +291,25 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
           <Save className="h-3 w-3" />
           {saving ? "Saving…" : "Save edits"}
         </button>
+        {candidate.clip_path && timesChanged ? (
+          <button
+            type="button"
+            onClick={handleTrim}
+            disabled={trimming || clipping}
+            className="inline-flex items-center gap-1.5 rounded border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-400 transition hover:bg-emerald-400/20 disabled:opacity-50"
+          >
+            <Scissors className="h-3 w-3" />
+            {trimming ? "Trimming…" : "Trim clip"}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={handleClip}
-          disabled={clipping}
+          disabled={clipping || trimming}
           className="inline-flex items-center gap-1.5 rounded border border-line px-3 py-1.5 text-xs text-white transition hover:border-signal/40 disabled:opacity-50"
         >
           <Scissors className="h-3 w-3" />
-          {clipping ? "Clipping…" : candidate.clip_path ? "Re-clip" : "Clip video"}
+          {clipping ? "Clipping…" : candidate.clip_path ? "Re-clip from source" : "Clip video"}
         </button>
 
         <div className="flex flex-1 flex-wrap items-center justify-end gap-2">

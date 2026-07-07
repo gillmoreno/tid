@@ -26,6 +26,7 @@ func (a *App) mountFactoryRoutes(r chi.Router) {
 	r.Get("/factory/sources", a.handleListSources)
 	r.Post("/factory/sources", a.handleCreateSource)
 	r.Get("/factory/sources/{id}", a.handleGetSource)
+	r.Delete("/factory/sources/{id}", a.handleDeleteSource)
 	r.Post("/factory/sources/{id}/analyze", a.handleAnalyzeSource)
 
 	r.Get("/factory/candidates", a.handleListCandidates)
@@ -33,6 +34,7 @@ func (a *App) mountFactoryRoutes(r chi.Router) {
 	r.Patch("/factory/candidates/{id}", a.handlePatchCandidate)
 	r.Delete("/factory/candidates/{id}", a.handleDeleteCandidate)
 	r.Post("/factory/candidates/{id}/clip", a.handleClipCandidate)
+	r.Post("/factory/candidates/{id}/trim", a.handleTrimCandidate)
 	r.Post("/factory/candidates/{id}/rewrite", a.handleRewriteCandidate)
 	r.Post("/factory/candidates/{id}/post-now", a.handlePostNowCandidate)
 	r.Post("/factory/candidates/{id}/schedule", a.handleScheduleCandidate)
@@ -166,6 +168,16 @@ func (a *App) handleCreateSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	dict, err := a.activeMentionDict()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if dict.ResolvePodcastHandle(podcast) == "" {
+		writeError(w, http.StatusBadRequest, "podcast must match a name in the mentions dictionary")
+		return
+	}
+
 	id := factory.NewSourceID(body.YouTubeURL, podcast)
 	src, err := a.factory.CreateSource(id, body.YouTubeURL, podcast)
 	if err != nil {
@@ -184,6 +196,19 @@ func (a *App) handleGetSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, src)
+}
+
+func (a *App) handleDeleteSource(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := a.factory.DeleteSource(id); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "source not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"deleted": id})
 }
 
 func (a *App) handleAnalyzeSource(w http.ResponseWriter, r *http.Request) {
@@ -315,29 +340,111 @@ func (a *App) handleDeleteCandidate(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleClipCandidate(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	c, err := a.runClipCandidate(id)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "candidate not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, c)
+}
+
+func (a *App) runClipCandidate(id string) (factory.Candidate, error) {
 	c, err := a.factory.GetCandidate(id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "candidate not found")
-		return
+		return factory.Candidate{}, err
 	}
 	src, err := a.factory.GetSource(c.SourceID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return factory.Candidate{}, err
 	}
 	dict, err := a.activeMentionDict()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+		return factory.Candidate{}, err
 	}
 	clipPath, err := a.runner.ClipCandidate(src, c, dict)
 	if err != nil {
+		return factory.Candidate{}, err
+	}
+	_ = a.factory.SetCandidateClip(id, clipPath)
+	return a.factory.GetCandidateEnriched(id)
+}
+
+func (a *App) handleTrimCandidate(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body struct {
+		StartTime string `json:"start_time"`
+		EndTime   string `json:"end_time"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if strings.TrimSpace(body.StartTime) == "" && strings.TrimSpace(body.EndTime) == "" {
+		writeError(w, http.StatusBadRequest, "start_time or end_time required")
+		return
+	}
+
+	c, err := a.runTrimCandidate(id, body.StartTime, body.EndTime)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "candidate not found")
+			return
+		}
+		if strings.Contains(err.Error(), "invalid trim") || strings.Contains(err.Error(), "invalid timestamp") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.factory.SetCandidateClip(id, clipPath)
-	c, _ = a.factory.GetCandidateEnriched(id)
 	writeJSON(w, c)
+}
+
+func (a *App) runTrimCandidate(id, startTime, endTime string) (factory.Candidate, error) {
+	c, err := a.factory.GetCandidate(id)
+	if err != nil {
+		return factory.Candidate{}, err
+	}
+	oldStart := c.StartTime
+	oldEnd := c.EndTime
+
+	newStart := strings.TrimSpace(startTime)
+	if newStart == "" {
+		newStart = c.StartTime
+	}
+	newEnd := strings.TrimSpace(endTime)
+	if newEnd == "" {
+		newEnd = c.EndTime
+	}
+	if newStart == oldStart && newEnd == oldEnd {
+		return factory.Candidate{}, fmt.Errorf("no timestamp changes")
+	}
+
+	c, err = a.factory.UpdateCandidateTimes(id, newStart, newEnd)
+	if err != nil {
+		return factory.Candidate{}, err
+	}
+
+	src, err := a.factory.GetSource(c.SourceID)
+	if err != nil {
+		return factory.Candidate{}, err
+	}
+	dict, err := a.activeMentionDict()
+	if err != nil {
+		return factory.Candidate{}, err
+	}
+
+	clipPath, err := a.runner.TrimCandidate(src, c, oldStart, oldEnd, dict)
+	if err != nil {
+		_, _ = a.factory.UpdateCandidateTimes(id, oldStart, oldEnd)
+		return factory.Candidate{}, err
+	}
+	_ = a.factory.SetCandidateClip(id, clipPath)
+	return a.factory.GetCandidateEnriched(id)
 }
 
 func (a *App) handleRewriteCandidate(w http.ResponseWriter, r *http.Request) {

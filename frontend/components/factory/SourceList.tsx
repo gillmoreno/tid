@@ -1,4 +1,4 @@
-import { Play, RefreshCw } from "lucide-react";
+import { Play, RefreshCw, Trash2 } from "lucide-react";
 import { analyzeSource } from "@/api/factory";
 import type { Source } from "@/types/factory";
 import { factoryStatusBadge } from "@/components/factory/factory-utils";
@@ -8,7 +8,9 @@ interface SourceListProps {
   sources: Source[];
   selectedId: string | null;
   analyzingId: string | null;
+  deletingId: string | null;
   onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
   onAnalyzed: () => void;
   onAnalyzing: (id: string | null) => void;
 }
@@ -17,7 +19,9 @@ export function SourceList({
   sources,
   selectedId,
   analyzingId,
+  deletingId,
   onSelect,
+  onDelete,
   onAnalyzed,
   onAnalyzing,
 }: SourceListProps) {
@@ -75,19 +79,35 @@ export function SourceList({
                   <p className="mt-1 text-xs text-red-400">{source.error_message}</p>
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => handleAnalyze(source)}
-                disabled={isAnalyzing}
-                className="shrink-0 rounded border border-line p-2 text-fog transition hover:border-signal/40 hover:text-signal disabled:opacity-50"
-                title="Analyze transcript"
-              >
-                {isAnalyzing ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleAnalyze(source)}
+                  disabled={isAnalyzing || deletingId === source.id}
+                  className="rounded border border-line p-2 text-fog transition hover:border-signal/40 hover:text-signal disabled:opacity-50"
+                  title="Analyze transcript"
+                >
+                  {isAnalyzing ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingId === source.id || isAnalyzing}
+                  onClick={() => {
+                    const label = source.podcast || source.id;
+                    if (window.confirm(`Remove source "${label}" and all its candidates?`)) {
+                      onDelete(source.id);
+                    }
+                  }}
+                  className="rounded border border-red-400/30 p-2 text-red-400 transition hover:bg-red-400/10 disabled:opacity-50"
+                  title="Remove source"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </li>
           );
         })}

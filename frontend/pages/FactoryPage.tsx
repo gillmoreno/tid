@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Factory, LayoutGrid, Table2 } from "lucide-react";
-import { deleteCandidate, fetchCandidates, fetchScheduled, fetchSources } from "@/api/factory";
+import {
+  deleteCandidate,
+  deleteSource,
+  fetchCandidates,
+  fetchScheduled,
+  fetchSources,
+} from "@/api/factory";
 import { CandidateCard } from "@/components/factory/CandidateCard";
 import { CandidatesTable } from "@/components/factory/CandidatesTable";
 import { IngestForm } from "@/components/factory/IngestForm";
@@ -20,6 +26,7 @@ export function FactoryPage() {
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [candidateView, setCandidateView] = useState<CandidateView>("cards");
   const [deletingCandidateId, setDeletingCandidateId] = useState<string | null>(null);
+  const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +107,28 @@ export function FactoryPage() {
     setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   }
 
+  async function handleSourceDeleted(id: string) {
+    setDeletingSourceId(id);
+    try {
+      await deleteSource(id);
+      const remaining = sources.filter((s) => s.id !== id);
+      setSources(remaining);
+      if (selectedSourceId === id) {
+        const nextId = remaining[0]?.id ?? null;
+        setSelectedSourceId(nextId);
+        if (!nextId) {
+          setCandidates([]);
+          setSelectedCandidateId(null);
+        }
+      }
+      await refreshScheduled();
+    } catch {
+      setError("Failed to remove source.");
+    } finally {
+      setDeletingSourceId(null);
+    }
+  }
+
   async function handleCandidateDeleted(id: string) {
     setDeletingCandidateId(id);
     try {
@@ -134,7 +163,7 @@ export function FactoryPage() {
             <h1 className="font-display text-2xl font-bold text-white">Post Factory</h1>
           </div>
           <p className="mt-2 text-sm text-fog">
-            YouTube in → biases + prompt → clip candidates + takes → refine → schedule or post now.
+            YouTube in → pick podcast → clip candidates + post text → refine → schedule or post now.
           </p>
         </div>
       </div>
@@ -154,7 +183,9 @@ export function FactoryPage() {
             sources={sources}
             selectedId={selectedSourceId}
             analyzingId={analyzingId}
+            deletingId={deletingSourceId}
             onSelect={setSelectedSourceId}
+            onDelete={handleSourceDeleted}
             onAnalyzed={refreshAll}
             onAnalyzing={setAnalyzingId}
           />

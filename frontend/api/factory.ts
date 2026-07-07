@@ -59,6 +59,10 @@ export async function createSource(input: {
   return data;
 }
 
+export async function deleteSource(id: string): Promise<void> {
+  await apiClient.delete(`/factory/sources/${id}`);
+}
+
 export async function analyzeSource(sourceId: string): Promise<AnalyzeResult> {
   const { data } = await apiClient.post<AnalyzeResult>(`/factory/sources/${sourceId}/analyze`);
   return data;
@@ -84,6 +88,14 @@ export async function updateCandidate(
 
 export async function clipCandidate(id: string): Promise<Candidate> {
   const { data } = await apiClient.post<Candidate>(`/factory/candidates/${id}/clip`);
+  return data;
+}
+
+export async function trimCandidate(
+  id: string,
+  patch: Partial<Pick<Candidate, "start_time" | "end_time">>
+): Promise<Candidate> {
+  const { data } = await apiClient.post<Candidate>(`/factory/candidates/${id}/trim`, patch);
   return data;
 }
 

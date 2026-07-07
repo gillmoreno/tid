@@ -74,7 +74,7 @@ export function IngestForm({ onCreated }: IngestFormProps) {
           </option>
           {podcasts.map((p) => (
             <option key={p.name} value={p.name}>
-              {p.name} (@{p.handle})
+              {p.name}
             </option>
           ))}
         </select>

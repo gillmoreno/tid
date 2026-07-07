@@ -200,6 +200,21 @@ func (s *Store) SetSourceStatus(id, status, errMsg string) error {
 	return err
 }
 
+func (s *Store) DeleteSource(id string) error {
+	res, err := s.db.Exec(`DELETE FROM sources WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("source not found")
+	}
+	return nil
+}
+
 func (s *Store) MarkSourceAnalyzed(id string) error {
 	_, err := s.db.Exec(`UPDATE sources SET status = 'analyzed', analyzed_at = datetime('now'), error_message = '' WHERE id = ?`, id)
 	return err
@@ -328,6 +343,23 @@ func (s *Store) UpdateCandidate(id string, postText, status string) (Candidate, 
 			status = COALESCE(NULLIF(?, ''), status),
 			updated_at = datetime('now')
 		WHERE id = ?`, postText, status, id)
+	if err != nil {
+		return Candidate{}, err
+	}
+	c, err := s.GetCandidate(id)
+	if err != nil {
+		return Candidate{}, err
+	}
+	return s.enrichCandidatePostText(c)
+}
+
+func (s *Store) UpdateCandidateTimes(id, startTime, endTime string) (Candidate, error) {
+	_, err := s.db.Exec(`
+		UPDATE candidates SET
+			start_time = COALESCE(NULLIF(?, ''), start_time),
+			end_time = COALESCE(NULLIF(?, ''), end_time),
+			updated_at = datetime('now')
+		WHERE id = ?`, startTime, endTime, id)
 	if err != nil {
 		return Candidate{}, err
 	}

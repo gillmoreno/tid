@@ -13,8 +13,7 @@ just dev   # agent runs this if not already running
 # One-shot: ingest + analyze → DB + UI
 ./loops/clip-to-post/run-factory.sh \
   --url "https://www.youtube.com/watch?v=VIDEO_ID" \
-  --title "Speaker or episode" \
-  --podcast "Podcast Name"
+  --podcast "All-In Podcast"
 ```
 
 Then tell Gil to review candidates at **http://localhost:5180/factory**.
@@ -61,7 +60,7 @@ Never commit `drafts/`, `data/`, `.env`, or `*.mp4`.
 ## Manual / step-by-step (same DB as UI)
 
 ```bash
-just factory ingest  --url URL --title "X" --podcast "Y"
+just factory ingest  --url URL --podcast "All-In Podcast"
 just factory analyze --source SOURCE_ID
 just factory clip    --candidate CANDIDATE_ID
 just factory schedule --candidate ID --at 2026-07-04T16:00:00-07:00
