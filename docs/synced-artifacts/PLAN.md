@@ -1,5 +1,24 @@
 # Synced Artifacts / Custom Rooms — Plan (Refined)
 
+**STATUS: COMMITTED** (git 9075308 on 2026-07-10)
+
+See also: 
+- P2P-RELAY-IDEA.md (exploration)
+- PRD-p2p-local-relay-monetization.md (detailed build spec with checklists)
+
+**Locked decisions:**
+- Mandatory signaling service for all initial connections (no free pure-P2P bypass).
+- Local relay runs on user devices; actual data/code sync is P2P.
+- Monetization primarily via the signaling service (tiers + self-host at higher levels).
+
+This architecture direction is locked in per discussion:
+- Code stored directly as compressed encrypted blob in room state
+- Automatic UI updates to members
+- Seamless transparent execution (iframe hidden from user)
+- Meta-app centralizes everything; no per-room Git or subdomains
+
+Ready for next (crazier) ideas.
+
 **Core Vision (updated 2026-07-09):**  
 A modern take on the original "Rooms" idea — **a meta-app that contains many custom apps ("rooms")**. 
 
@@ -109,14 +128,10 @@ The pure "standalone single HTML" path is de-emphasized. The stronger model is a
   - No direct DOM or relay access leaked to the iframe.
 - Since code originates from the room owner (via AI), risk is contained.
 
-#### Standalone / Exported PWA Path
-- From inside the meta-app, owner can "Export as standalone PWA".
-- The meta-app bundles:
-  - The current `code.bundle`
-  - A minimal loader + the full sync kit (no bridge needed)
-  - Room secrets injected only in the URL hash
-- Produces a single HTML (or small static set) that can be hosted anywhere or saved as a file.
-- This gives the "proper deployed app" experience without forcing a subdomain or Git repo.
+#### Standalone / Exported PWA Path (Post-MVP)
+- Export to standalone PWA or user self-hosted site is explicitly out of MVP scope.
+- Nice-to-have for later: users can create their own PWAs or host rooms on their own websites using the same code-blob + local-relay technology.
+- For MVP: everything lives inside the meta-app. No export flow required.
 
 #### Why This Avoids the Nightmares
 - Endless GitHub repo? Code lives encrypted inside the room's relay data. No source control sprawl unless the user explicitly exports.
@@ -135,7 +150,7 @@ This keeps the "app of apps" spirit of original Rooms while allowing real custom
 - Strong preference to avoid the operator bearing AI generation costs.
 - Primary path: expose the harness as an **MCP server / tool** so users connect their own Claude, Grok, local models, etc.
 - Secondary: optional hosted generation inside the meta-app (with clear costs or limits).
-- The harness must output code that works both embedded in the meta-shell *and* as an exported standalone PWA.
+- The harness must output code that works inside the meta-app (embedded via the bridge). Support for exported standalone PWAs is post-MVP.
 
 ### Sharing & Social
 - Inherit the best of original Rooms: URL hash for secrets, client-side QR, WhatsApp-friendly links, member attribution.

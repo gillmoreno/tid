@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thin P2P Test – Signaling + WebRTC</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; max-width: 800px; margin: auto; background: #0f0f0f; color: #ddd; }
+    input, button { padding: 8px 12px; margin: 4px; font-size: 14px; }
+    button { cursor: pointer; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .log { background: #1a1a1a; border: 1px solid #333; padding: 10px; height: 280px; overflow-y: auto; font-family: ui-monospace, monospace; white-space: pre-wrap; font-size: 13px; }
+    .status { font-weight: 600; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+    .connected { background: #052e16; color: #4ade80; }
+    .disconnected { background: #3f1f1f; color: #f87171; }
+    .section { background: #1f1f1f; padding: 16px; border-radius: 8px; margin: 16px 0; }
+    .error { color: #f87171; }
+    .success { color: #4ade80; }
+  </style>
+</head>
+<body>
+  <h1>Thin P2P Test – Signaling + WebRTC</h1>
+  <p><strong>Only the signaling server is centralized.</strong> After the initial handshake, everything is direct peer-to-peer via WebRTC DataChannel.</p>
+
+  <div class="section">
+    <div class="row">
+      <label>Signaling URL:</label>
+      <input id="sig" value="https://YOUR-NGROK-URL" style="width: 420px;">
+    </div>
+    <div class="row">
+      <label>Room ID:</label>
+      <input id="room" value="test-expenses" style="width: 200px;">
+    </div>
+    <div class="row" style="margin-top: 12px;">
+      <button onclick="register()">1. Register</button>
+      <button onclick="createOffer()" style="background:#3b82f6;color:white;">2. Create Offer (Offerer side)</button>
+      <button onclick="pollForOfferAndAnswer()">3. Poll Offer &amp; Answer (Answerer side)</button>
+      <button onclick="sendTest()">Send Test Message</button>
+      <button onclick="closeAll()" style="background:#ef4444;color:white;">Close</button>
+    </div>
+  </div>
+
+  <div>
+    <strong>Status:</strong> <span id="status" class="status disconnected">Disconnected</span>
+  </div>
+
+  <h3>Log (open DevTools Console for more details)</h3>
+  <div id="log" class="log"></div>
+
+  <script>
+    let pc = null;
+    let dc = null;
+    const logEl = () => document.getElementById('log');
+    const statusEl = () => document.getElementById('status');
+
+    function log(msg, type = 'info') {
+      const time = new Date().toLocaleTimeString();
+      const line = `[${time}] ${msg}`;
+      logEl().textContent += line + '\n';
+      logEl().scrollTop = logEl().scrollHeight;
+      if (type === 'error') console.error(line);
+      else console.log(line);
+    }
+
+    // Helper: always send the ngrok skip header
+    function fetchNgrok(url, opts = {}) {
+      opts = opts || {};
+      opts.headers = opts.headers || {};
+      opts.headers['ngrok-skip-browser-warning'] = 'true';
+      return fetch(url, opts);
+    }
+
+    // Ensure all future fetches have it (for safety)
+    const _origFetch = window.fetch;
+    window.fetch = function(u, o) {
+      o = o || {};
+      o.headers = o.headers || {};
+      if (typeof u === 'string' && u.includes('ngrok')) {
+        o.headers['ngrok-skip-browser-warning'] = 'true';
+      }
+      return _origFetch(u, o);
+    };
+
+    function setStatus(text, connected) {
+      statusEl().textContent = text;
+      statusEl().className = 'status ' + (connected ? 'connected' : 'disconnected');
+    }
+
+    async function register() {
+      const sig = document.getElementById('sig').value.trim().replace(/\/$/, '');
+      const room = document.getElementById('room').value.trim();
+      if (!sig || !room) return log('Missing signaling URL or room', 'error');
+
+      try {
+        const res = await fetchNgrok(`${sig}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ room, addr: 'browser-' + Math.random().toString(36).slice(2) })
+        });
+        if (res.ok) {
+          log('Registered with signaling');
+        } else {
+          log('Register failed: ' + res.status, 'error');
+        }
+      } catch (e) {
+        log('Register error: ' + e.message, 'error');
+      }
+    }
+
+    async function createOffer() {
+      const sig = document.getElementById('sig').value.trim().replace(/\/$/, '');
+      const room = document.getElementById('room').value.trim();
+
+      if (pc) {
+        log('Already have a connection. Close first.');
+        return;
+      }
+
+      pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+
+      dc = pc.createDataChannel('p2p-relay');
+      setupDataChannel(dc);
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          fetchNgrok(`${sig}/room/${encodeURIComponent(room)}/candidate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid || '' })
+          }).catch(() => {});
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const res = await fetch(`${sig}/room/${encodeURIComponent(room)}/offer`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({ sdp: offer.sdp, type: offer.type })
+      });
+
+      if (res.ok) {
+        log('Offer sent to signaling. Now tell the other side to "Poll Offer & Answer".');
+        setStatus('Offer sent – waiting for answer', false);
+        startPollingForAnswerAndCandidates(sig, room);
+      } else {
+        log('Failed to send offer: ' + res.status, 'error');
+      }
+    }
+
+    async function pollForOfferAndAnswer() {
+      const sig = document.getElementById('sig').value.trim().replace(/\/$/, '');
+      const room = document.getElementById('room').value.trim();
+
+      log('Polling for offer (as the Answerer side)...');
+
+      // Poll for offer
+      let offer = null;
+      for (let i = 0; i < 25; i++) {
+        try {
+          const res = await fetchNgrok(`${sig}/room/${encodeURIComponent(room)}/offer`);
+          if (res.status === 200) {
+            offer = await res.json();
+            log('Got offer from signaling');
+            break;
+          }
+        } catch (e) {
+          console.error('poll offer error', e);
+        }
+        await new Promise(r => setTimeout(r, 1200));
+      }
+
+      if (!offer || !offer.sdp) {
+        log('No offer found. The Offerer side must click "Create Offer & Send" first.', 'error');
+        return;
+      }
+
+      pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+
+      pc.ondatachannel = (e) => {
+        dc = e.channel;
+        setupDataChannel(dc);
+      };
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          fetchNgrok(`${sig}/room/${encodeURIComponent(room)}/candidate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid || '' })
+          }).catch(() => {});
+        }
+      };
+
+      try {
+        await pc.setRemoteDescription(offer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        await fetch(`${sig}/room/${encodeURIComponent(room)}/answer`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({ sdp: answer.sdp, type: answer.type })
+        });
+
+        log('Answer sent back. Now polling candidates...');
+        setStatus('Answer sent – connecting', false);
+        startPollingCandidates(sig, room);
+      } catch (e) {
+        log('Error creating answer: ' + e.message, 'error');
+      }
+    }
+
+    function setupDataChannel(channel) {
+      dc = channel;
+
+      dc.onopen = () => {
+        log('DataChannel OPEN – direct P2P established!', 'success');
+        setStatus('P2P Connected', true);
+      };
+
+      dc.onmessage = (event) => {
+        log('Received via P2P: ' + event.data);
+      };
+
+      dc.onclose = () => {
+        log('DataChannel closed');
+        setStatus('Closed', false);
+      };
+
+      dc.onerror = (e) => log('DataChannel error: ' + e, 'error');
+    }
+
+    async function startPollingForAnswerAndCandidates(sig, room) {
+      // Poll for answer
+      const answerInterval = setInterval(async () => {
+        try {
+          const res = await fetchNgrok(`${sig}/room/${encodeURIComponent(room)}/answer`);
+          if (res.status === 200) {
+            const answer = await res.json();
+            if (pc && !pc.remoteDescription) {
+              await pc.setRemoteDescription(answer);
+              log('Got answer and set remote description');
+              setStatus('Answer received – connecting', true);
+            }
+            clearInterval(answerInterval);
+          }
+        } catch (e) {
+          console.error('poll answer error', e);
+        }
+      }, 1200);
+
+      startPollingCandidates(sig, room);
+
+      setTimeout(() => clearInterval(answerInterval), 60000);
+    }
+
+    async function startPollingCandidates(sig, room) {
+      const seen = new Set();
+      const interval = setInterval(async () => {
+        if (!pc) {
+          clearInterval(interval);
+          return;
+        }
+        try {
+          const res = await fetchNgrok(`${sig}/room/${encodeURIComponent(room)}/candidates`);
+          if (!res.ok) {
+            console.warn('candidates fetch not ok', res.status);
+            return;
+          }
+          const list = await res.json() || [];
+          for (const c of list) {
+            const key = (c.candidate || '') + (c.sdpMid || '');
+            if (!seen.has(key)) {
+              seen.add(key);
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(c));
+                log('Added ICE candidate');
+              } catch (e) {}
+            }
+          }
+        } catch (e) {
+          console.error('poll candidates error', e);
+        }
+      }, 1500);
+
+      setTimeout(() => clearInterval(interval), 90000);
+    }
+
+    async function sendTest() {
+      if (!dc || dc.readyState !== 'open') {
+        log('No open data channel. Complete offer/answer first.', 'error');
+        return;
+      }
+      const msg = 'test-expense:coffee:4.50:' + Date.now();
+      dc.send(msg);
+      log('Sent via P2P: ' + msg);
+    }
+
+    function closeAll() {
+      if (dc) dc.close();
+      if (pc) pc.close();
+      pc = null;
+      dc = null;
+      setStatus('Closed', false);
+      log('Connection closed by user');
+    }
+
+    // Auto log ready
+    log('Instructions (follow exactly):');
+    log('1. On BOTH devices: click "Register"');
+    log('2. On ONE device only: click "Create Offer & Send"');
+    log('3. On the OTHER device: click "Poll for Answer"');
+    log('4. Wait until you see "P2P Connected" (green)');
+    log('5. Then click "Send Test Update" on either side');
+    log('');
+    log('Critical: Both must use the exact same ngrok URL + same Room ID.');
+  </script>
+</body>
+</html>
