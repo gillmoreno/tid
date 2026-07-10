@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Are you in? — Cabin Weekend</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .response-card { transition: all 0.1s ease; }
+    .qr-canvas { image-rendering: pixelated; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+  <div class="max-w-2xl mx-auto p-6">
+    <!-- Hero -->
+    <div class="text-center mb-10">
+      <div class="inline-flex items-center gap-2 mb-3">
+        <span class="text-4xl">🏕️</span>
+      </div>
+      <h1 class="text-4xl font-semibold tracking-tight">Cabin Weekend</h1>
+      <p class="mt-2 text-xl text-zinc-400">Aug 15–17 • Lake Tahoe</p>
+      <p class="mt-1 text-sm text-emerald-400">End-to-end encrypted • Lives only on your devices</p>
+    </div>
+
+    <!-- Status -->
+    <div id="status" 
+         class="mb-6 flex items-center justify-center gap-2 text-sm px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 w-fit mx-auto">
+      <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+      <span id="status-text">Connected • 3 people here</span>
+    </div>
+
+    <!-- Main Form -->
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-8">
+      <h2 class="font-medium mb-4 text-lg">Let us know if you're coming</h2>
+      
+      <form id="rsvp-form" class="space-y-4">
+        <div>
+          <label class="block text-sm text-zinc-400 mb-1">Your name</label>
+          <input id="name" type="text" required
+                 class="w-full bg-zinc-950 border border-zinc-700 focus:border-zinc-500 rounded-xl px-4 py-3 text-lg outline-none"
+                 placeholder="Alex Rivera">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-zinc-400 mb-1">Are you coming?</label>
+            <div class="flex gap-2">
+              <button type="button" data-going="true"
+                      class="going-btn flex-1 px-4 py-3 rounded-2xl border border-emerald-500 bg-emerald-500/10 text-emerald-400 font-medium active:scale-[0.985]">
+                Yes, I'm in
+              </button>
+              <button type="button" data-going="false"
+                      class="going-btn flex-1 px-4 py-3 rounded-2xl border border-zinc-700 hover:border-zinc-500">
+                Can't make it
+              </button>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm text-zinc-400 mb-1">How many people?</label>
+            <input id="count" type="number" value="1" min="1" max="6"
+                   class="w-full bg-zinc-950 border border-zinc-700 focus:border-zinc-500 rounded-xl px-4 py-3 text-lg outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm text-zinc-400 mb-1">Dietary notes or anything else?</label>
+          <textarea id="note" rows="2" placeholder="Vegetarian + no nuts please"
+                    class="w-full bg-zinc-950 border border-zinc-700 focus:border-zinc-500 rounded-2xl px-4 py-3 outline-none"></textarea>
+        </div>
+
+        <button type="submit"
+                class="w-full bg-white text-black font-medium py-3.5 rounded-2xl active:bg-zinc-200 transition-colors">
+          Send my response
+        </button>
+      </form>
+    </div>
+
+    <!-- Live Responses -->
+    <div class="mb-8">
+      <div class="flex items-center justify-between mb-3 px-1">
+        <h3 class="font-medium">Who's coming <span id="total-count" class="text-zinc-500 font-normal">(0)</span></h3>
+        <div class="text-xs px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800">live</div>
+      </div>
+
+      <div id="responses-list" class="space-y-2">
+        <!-- Populated by JS -->
+      </div>
+
+      <div id="empty-state" class="text-center py-8 text-zinc-500 text-sm border border-dashed border-zinc-800 rounded-2xl">
+        No responses yet. Be the first!
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-8 text-sm">
+      <div class="flex justify-between">
+        <div>
+          <div class="text-emerald-400 font-medium" id="going-total">0 going</div>
+          <div class="text-xs text-zinc-500">+ guests</div>
+        </div>
+        <div class="text-right">
+          <div id="total-people" class="font-semibold text-2xl tabular-nums">0</div>
+          <div class="text-[10px] text-zinc-500 -mt-1">total people</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Share & Socialization (inherited from Rooms style) -->
+    <div class="border-t border-zinc-800 pt-6">
+      <h3 class="font-medium mb-3 text-sm tracking-wider text-zinc-400">SHARE THIS</h3>
+      
+      <div class="flex flex-col sm:flex-row gap-3">
+        <button id="copy-link"
+                class="flex-1 flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 active:bg-zinc-950 transition-colors px-5 py-3 rounded-2xl text-sm font-medium">
+          <span>📋</span>
+          <span>Copy invite link</span>
+        </button>
+        
+        <button id="show-qr"
+                class="flex-1 flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 active:bg-zinc-950 transition-colors px-5 py-3 rounded-2xl text-sm font-medium">
+          <span>Show QR code</span>
+        </button>
+      </div>
+
+      <p class="mt-3 text-[11px] text-center text-zinc-500">
+        Anyone with the link can respond. The room code lives safely after the # in the URL.
+      </p>
+    </div>
+
+    <div class="mt-8 text-center">
+      <p class="text-[10px] text-zinc-600">This data is end-to-end encrypted. Only people with the link can see responses.</p>
+    </div>
+  </div>
+
+  <!-- QR Modal -->
+  <div id="qr-modal" class="hidden fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center p-4 z-50">
+    <div class="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 w-full max-w-xs">
+      <div class="flex justify-between items-center mb-4">
+        <div class="font-medium">Scan to join</div>
+        <button id="close-qr" class="text-zinc-400 text-xl leading-none">×</button>
+      </div>
+      <div class="flex justify-center bg-white p-4 rounded-2xl">
+        <canvas id="qr-canvas" width="200" height="200" class="qr-canvas"></canvas>
+      </div>
+      <p class="text-center text-xs text-zinc-500 mt-3">Open on any device • works offline after first load</p>
+    </div>
+  </div>
+
+<script>
+// =====================================================
+// SPIKE: Synced Artifacts — RSVP Interest Form
+// This demonstrates the *exact* pattern an LLM should generate.
+// 
+// In the real version:
+//   - Replace the DEMO sections with real initSyncedArtifact() from the kit
+//   - The kit will handle encryption, relay WS, IDB, reconnect, etc.
+//   - All of the code below the "=== APP LOGIC ===" line stays almost identical.
+//
+// Current behavior in this spike:
+//   - Fully functional beautiful UI
+//   - Uses localStorage as a demo "state"
+//   - Simulates sync by listening to storage events (multiple tabs)
+//   - Shows exactly where the real kit calls would go
+// =====================================================
+
+const DEMO_ROOM_KEY = 'demo:rsvp:cabin-weekend';
+
+// --- DEMO / STUB for the real kit (will be replaced) ---
+let demoState = { responses: [] };
+let demoMemberId = localStorage.getItem('demo:memberId') || ('m_' + Math.random().toString(36).slice(2, 10));
+
+function saveDemo() {
+  localStorage.setItem(DEMO_ROOM_KEY, JSON.stringify(demoState));
+  // Simulate "sync" to other tabs
+  window.dispatchEvent(new Event('storage'));
+}
+
+function loadDemo() {
+  const raw = localStorage.getItem(DEMO_ROOM_KEY);
+  if (raw) demoState = JSON.parse(raw);
+}
+
+// Very simple "subscribe"
+const demoListeners = [];
+function demoSubscribe(fn) {
+  demoListeners.push(fn);
+  fn(demoState);
+  return () => {
+    const i = demoListeners.indexOf(fn);
+    if (i >= 0) demoListeners.splice(i, 1);
+  };
+}
+
+function demoUpdate(mutator) {
+  mutator(demoState);
+  saveDemo();
+  demoListeners.forEach(l => l(demoState));
+}
+
+// Cross-tab simulation (open the HTML twice)
+window.addEventListener('storage', () => {
+  loadDemo();
+  demoListeners.forEach(l => l(demoState));
+});
+
+// --- REAL KIT USAGE WILL LOOK ALMOST IDENTICAL TO THIS ---
+function initRealKit() {
+  // In production this will be:
+  // const art = initSyncedArtifact({ relayUrl: "wss://..." });
+  // return {
+  //   getState: () => art.getState(),
+  //   update: art.update,
+  //   subscribe: art.subscribe,
+  //   getMemberId: () => art.getMemberId(),
+  //   getStatus: () => art.getStatus(),
+  // };
+  
+  // For the spike we return the demo version
+  loadDemo();
+  return {
+    getState: () => demoState,
+    update: demoUpdate,
+    subscribe: demoSubscribe,
+    getMemberId: () => demoMemberId,
+    getStatus: () => ({ loaded: true, connected: true }),
+    setDisplayName: (n) => localStorage.setItem('demo:name:' + demoMemberId, n),
+    getDisplayName: (id = demoMemberId) => localStorage.getItem('demo:name:' + id) || 'Anonymous'
+  };
+}
+
+// =====================================================
+// APP LOGIC — This part is what the LLM generates freely
+// =====================================================
+
+const art = initRealKit();
+let selectedGoing = null;
+
+function render() {
+  const state = art.getState();
+  const responses = state.responses || [];
+  
+  // Status
+  const statusEl = document.getElementById('status-text');
+  const st = art.getStatus();
+  statusEl.textContent = st.connected ? 'Connected • syncing' : 'Offline • will sync when online';
+
+  // Responses list
+  const list = document.getElementById('responses-list');
+  const empty = document.getElementById('empty-state');
+  list.innerHTML = '';
+  
+  if (responses.length === 0) {
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    responses
+      .slice()
+      .sort((a, b) => (b.at || 0) - (a.at || 0))
+      .forEach(r => {
+        const name = r.name || art.getDisplayName(r.by) || 'Someone';
+        const div = document.createElement('div');
+        div.className = 'response-card bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 flex justify-between items-start';
+        div.innerHTML = `
+          <div>
+            <div class="font-medium">${name}</div>
+            <div class="text-xs text-zinc-500">${r.going ? 'Coming' : 'Not coming'} · ${r.count || 1} person${(r.count||1)>1?'s':''}</div>
+            ${r.note ? `<div class="text-sm text-zinc-400 mt-1">"${r.note}"</div>` : ''}
+          </div>
+          <div class="text-[10px] text-zinc-500 tabular-nums">${new Date(r.at || Date.now()).toLocaleDateString([], {month:'short', day:'numeric'})}</div>
+        `;
+        list.appendChild(div);
+      });
+  }
+
+  // Summary
+  const going = responses.filter(r => r.going);
+  const total = going.reduce((sum, r) => sum + (r.count || 1), 0);
+  
+  document.getElementById('going-total').textContent = `${going.length} going`;
+  document.getElementById('total-people').textContent = total;
+  document.getElementById('total-count').textContent = `(${responses.length})`;
+}
+
+function setupForm() {
+  const form = document.getElementById('rsvp-form');
+  const nameInput = document.getElementById('name');
+  const countInput = document.getElementById('count');
+  const noteInput = document.getElementById('note');
+
+  // Pre-fill name if we have one
+  const savedName = localStorage.getItem('demo:name:' + art.getMemberId());
+  if (savedName) nameInput.value = savedName;
+
+  // Going buttons
+  document.querySelectorAll('.going-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.going-btn').forEach(b => b.classList.remove('border-emerald-500', 'bg-emerald-500/10', 'text-emerald-400'));
+      btn.classList.add('border-emerald-500', 'bg-emerald-500/10', 'text-emerald-400');
+      selectedGoing = btn.dataset.going === 'true';
+    });
+  });
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (selectedGoing === null) {
+      alert("Please choose whether you're coming");
+      return;
+    }
+    const name = nameInput.value.trim() || 'Anonymous';
+    const count = parseInt(countInput.value) || 1;
+    const note = noteInput.value.trim();
+
+    // THIS IS THE KEY LINE — the LLM must call update for persistence + sync
+    art.update(draft => {
+      draft.responses = draft.responses || [];
+      draft.responses.push({
+        id: 'r_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        name,
+        going: selectedGoing,
+        count,
+        note: note || undefined,
+        by: art.getMemberId(),
+        at: Date.now()
+      });
+    });
+
+    // Save name for future
+    art.setDisplayName?.(name);
+
+    // Reset form
+    form.reset();
+    selectedGoing = null;
+    document.querySelectorAll('.going-btn').forEach(b => b.classList.remove('border-emerald-500', 'bg-emerald-500/10', 'text-emerald-400'));
+  });
+}
+
+function setupSharing() {
+  const copyBtn = document.getElementById('copy-link');
+  const qrBtn = document.getElementById('show-qr');
+  const modal = document.getElementById('qr-modal');
+  const canvas = document.getElementById('qr-canvas');
+
+  function getShareUrl() {
+    // Same safe pattern as Rooms: secrets only after #
+    const base = location.origin + location.pathname;
+    const code = new URLSearchParams(location.hash.slice(1)).get('c') || 'cabin-weekend-demo';
+    return `${base}#c=${encodeURIComponent(code)}`;
+  }
+
+  copyBtn.addEventListener('click', async () => {
+    const url = getShareUrl();
+    await navigator.clipboard.writeText(url);
+    const original = copyBtn.textContent;
+    copyBtn.textContent = '✓ Copied!';
+    setTimeout(() => copyBtn.textContent = original, 1600);
+  });
+
+  qrBtn.addEventListener('click', () => {
+    const url = getShareUrl();
+    // Very small QR using canvas (no external dep for the spike)
+    drawSimpleQR(canvas, url, 200);
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  });
+
+  document.getElementById('close-qr').addEventListener('click', () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  });
+}
+
+// Extremely minimal QR drawer (good enough for spike)
+function drawSimpleQR(canvas, text, size) {
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, size, size);
+  
+  // Fake QR pattern (real version will use a proper tiny lib or qrcode lib)
+  ctx.fillStyle = '#000';
+  const cell = Math.floor(size / 25);
+  for (let y = 0; y < 25; y++) {
+    for (let x = 0; x < 25; x++) {
+      // Deterministic pseudo-random pattern based on text
+      const seed = (x * 31 + y * 17 + text.length) % 3;
+      if (seed === 0 || (x < 5 && y < 5) || (x > 19 && y < 5) || (x < 5 && y > 19)) {
+        ctx.fillRect(x * cell, y * cell, cell - 1, cell - 1);
+      }
+    }
+  }
+  // Add a little text hint
+  ctx.fillStyle = '#666';
+  ctx.font = '10px system-ui';
+  ctx.fillText('demo QR', 8, size - 8);
+}
+
+function init() {
+  // Bootstrap member name if needed
+  if (!localStorage.getItem('demo:name:' + art.getMemberId())) {
+    // In real life the kit or UI would prompt nicely
+  }
+
+  // Subscribe to live updates
+  art.subscribe((state) => {
+    render();
+  });
+
+  setupForm();
+  setupSharing();
+  render();
+
+  // Nice touch: if no room code in hash, create one (like Rooms would)
+  if (!location.hash.includes('c=')) {
+    const newCode = 'cabin-' + Math.random().toString(36).slice(2, 8);
+    history.replaceState(null, '', `#c=${newCode}`);
+  }
+
+  // Keyboard hint
+  console.log('%c[Synced Artifact Spike] Open this file in two browser windows/tabs to see simulated sync.', 'color:#555');
+}
+
+init();
+</script>
+</body>
+</html>

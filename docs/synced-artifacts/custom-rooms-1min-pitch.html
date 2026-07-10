@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Custom Rooms • 60-Second Pitch</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
+    
+    :root {
+      --font-sans: 'Inter', system_ui, sans-serif;
+    }
+    
+    body {
+      font-family: 'Inter', system_ui, sans-serif;
+    }
+    
+    .font-display {
+      font-family: 'Space Grotesk', 'Inter', system_ui, sans-serif;
+      font-weight: 600;
+    }
+
+    .pitch-card {
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .section {
+      scroll-margin-top: 2rem;
+    }
+
+    .flow-arrow {
+      animation: flow 2s ease infinite;
+    }
+
+    .mini-room {
+      transition: all 0.2s ease;
+    }
+
+    .diagram-box {
+      transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+
+    .investor-text {
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    
+    .stat {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .key-visual {
+      background: linear-gradient(145deg, #18181b 0%, #27272a 100%);
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+  <!-- Top bar -->
+  <div class="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-white flex items-center justify-center">
+            <span class="text-zinc-950 font-bold text-xl tracking-tighter">CR</span>
+          </div>
+          <div>
+            <span class="font-semibold text-xl tracking-tight">Custom Rooms</span>
+          </div>
+        </div>
+      </div>
+      <div class="text-xs px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-400">
+        60-second investor explainer
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-4xl mx-auto px-6 pt-10 pb-16">
+    
+    <!-- Hero -->
+    <div class="text-center mb-12">
+      <div class="inline-flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-1 text-sm mb-6">
+        <div class="w-2 h-2 bg-emerald-400 rounded-full"></div>
+        <span class="font-medium">The missing layer between AI and real apps</span>
+      </div>
+      
+      <h1 class="text-6xl font-semibold tracking-tighter leading-none mb-4">
+        Beautiful apps.<br>
+        Real data.<br>
+        <span class="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Zero backend.</span>
+      </h1>
+      <p class="text-2xl text-zinc-400 max-w-md mx-auto">
+        An app that creates other apps — where the code itself is just encrypted data.
+      </p>
+    </div>
+
+    <!-- The Problem -->
+    <div class="mb-12">
+      <div class="uppercase text-xs tracking-[2px] text-zinc-500 mb-3">The Problem</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="pitch-card bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <div class="text-emerald-400 text-sm font-medium mb-2">AI is amazing at this</div>
+          <div class="text-2xl leading-tight">Gorgeous, fully custom interfaces in seconds</div>
+        </div>
+        <div class="pitch-card bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+          <div class="text-red-400 text-sm font-medium mb-2">But fails at this</div>
+          <div class="text-2xl leading-tight">Making them actually work for multiple people with real data</div>
+          <div class="mt-4 text-sm text-zinc-400">
+            Result: beautiful dead HTML → everyone falls back to Google Forms, Airtable, Notion.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- The Breakthrough -->
+    <div class="mb-12">
+      <div class="uppercase text-xs tracking-[2px] text-zinc-500 mb-3">The Breakthrough</div>
+      
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
+        <div class="flex items-start gap-4">
+          <div>
+            <div class="text-4xl leading-none font-semibold tracking-tighter mb-1">Code is just data.</div>
+            <div class="text-xl text-zinc-400">Store the entire custom frontend as an encrypted blob inside the room — exactly like the responses or expenses.</div>
+          </div>
+        </div>
+        
+        <div class="mt-6 pt-6 border-t border-zinc-800 text-sm grid grid-cols-2 gap-x-8 gap-y-3 text-zinc-400">
+          <div class="flex gap-2">• No Git repos. No subdomains.</div>
+          <div class="flex gap-2">• One meta-app. Infinite rooms.</div>
+          <div class="flex gap-2">• Full design freedom (no schemas).</div>
+          <div class="flex gap-2">• Same blind relay as original Rooms.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- How It Works -->
+    <div class="mb-12">
+      <div class="uppercase text-xs tracking-[2px] text-zinc-500 mb-3">How it works (30 seconds)</div>
+      
+      <div class="key-visual rounded-3xl p-8 border border-zinc-700">
+        
+        <!-- Simple flow -->
+        <div class="flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
+          
+          <!-- Step 1 -->
+          <div class="flex-1">
+            <div class="text-xs uppercase tracking-widest text-zinc-400 mb-1">1. Create</div>
+            <div class="font-semibold text-xl">User describes app in natural language</div>
+            <div class="text-emerald-400 text-sm mt-1">“Beautiful RSVP form for our cabin trip”</div>
+          </div>
+
+          <div class="hidden md:block text-3xl text-zinc-600">→</div>
+
+          <!-- Step 2 -->
+          <div class="flex-1">
+            <div class="text-xs uppercase tracking-widest text-zinc-400 mb-1">2. Generate + Store</div>
+            <div class="font-semibold text-xl">AI produces custom code</div>
+            <div class="mt-1 text-sm">Code is compressed and <span class="font-medium text-white">stored directly as encrypted data</span> inside the room (same as any other field).</div>
+          </div>
+
+          <div class="hidden md:block text-3xl text-zinc-600">→</div>
+
+          <!-- Step 3 -->
+          <div class="flex-1">
+            <div class="text-xs uppercase tracking-widest text-zinc-400 mb-1">3. Run</div>
+            <div class="font-semibold text-xl">Meta-app loads room</div>
+            <div class="text-sm mt-1">Custom code runs in a seamless sandboxed iframe. Users see a beautiful native-feeling app. All data syncs via the blind relay.</div>
+          </div>
+        </div>
+
+        <!-- Visual diagram -->
+        <div class="mt-8 pt-8 border-t border-zinc-700">
+          <div class="text-center text-xs text-zinc-500 mb-4 tracking-wider">THE ARCHITECTURE</div>
+          
+          <div class="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-2">
+            
+            <!-- Meta App -->
+            <div class="diagram-box w-full md:w-52 bg-zinc-800 border border-zinc-700 rounded-2xl p-4">
+              <div class="text-xs font-medium mb-2 text-center">META-APP (one domain)</div>
+              <div class="space-y-2">
+                <div class="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-1.5 text-sm flex items-center gap-2">
+                  <div class="w-2 h-2 bg-white rounded-full"></div>
+                  <div class="flex-1 text-xs">My Cabin Trip</div>
+                </div>
+                <div class="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-1.5 text-sm flex items-center gap-2">
+                  <div class="w-2 h-2 bg-emerald-400 rounded-full"></div>
+                  <div class="flex-1 text-xs">Group Expenses</div>
+                </div>
+                <div class="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-1.5 text-sm flex items-center gap-2">
+                  <div class="w-2 h-2 bg-violet-400 rounded-full"></div>
+                  <div class="flex-1 text-xs">Book Club</div>
+                </div>
+              </div>
+              <div class="text-[10px] text-center mt-3 text-zinc-500">One shell. All rooms inside.</div>
+            </div>
+
+            <div class="text-xl text-zinc-700 font-light hidden md:block">⟶</div>
+
+            <!-- Room -->
+            <div class="diagram-box w-full md:w-48 bg-zinc-900 border border-zinc-700 rounded-2xl p-4 text-center">
+              <div class="uppercase text-[10px] tracking-widest text-emerald-400 mb-1">A SINGLE ROOM</div>
+              <div class="font-medium">Custom Code + Data</div>
+              <div class="my-3 text-xs bg-zinc-800 border border-zinc-700 rounded-xl p-2 text-left">
+                <div class="font-mono text-[10px] text-emerald-400">code.bundle</div>
+                <div class="text-[10px] text-zinc-400">+ responses, expenses, etc.</div>
+              </div>
+              <div class="text-[10px] text-zinc-400">Both encrypted the same way</div>
+            </div>
+
+            <div class="text-xl text-zinc-700 font-light hidden md:block">⟶</div>
+
+            <!-- Relay -->
+            <div class="diagram-box w-full md:w-44 bg-zinc-800 border border-zinc-700 rounded-2xl p-4 text-center">
+              <div class="text-xs mb-1">BLIND RELAY</div>
+              <div class="font-semibold">Only sees ciphertext</div>
+              <div class="mt-2 text-[10px] leading-tight text-zinc-400">
+                Go binary. Self-hostable.<br>
+                No schema knowledge. No data access.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Why This Wins -->
+    <div class="mb-12">
+      <div class="uppercase text-xs tracking-[2px] text-zinc-500 mb-3">Why investors should care</div>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="pitch-card bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+          <div class="font-semibold text-lg">True ownership, zero liability</div>
+          <div class="mt-3 text-sm text-zinc-400">Data and code are end-to-end encrypted. The operator (you) literally cannot read anything. Same model that made original Rooms special.</div>
+        </div>
+        <div class="pitch-card bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+          <div class="font-semibold text-lg">Infinite apps, one deploy</div>
+          <div class="mt-3 text-sm text-zinc-400">No Git sprawl. No subdomain per app. No hosting costs per room. The meta-app is one thing. Rooms are just encrypted blobs.</div>
+        </div>
+        <div class="pitch-card bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+          <div class="font-semibold text-lg">AI actually ships real software</div>
+          <div class="mt-3 text-sm text-zinc-400">Claude can now produce not just UIs, but working multi-user apps that persist, sync, and feel native — in seconds.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- The Experience -->
+    <div class="mb-10">
+      <div class="uppercase text-xs tracking-[2px] text-zinc-500 mb-3">The experience</div>
+      <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+        <div class="flex flex-col md:flex-row gap-6 items-start">
+          <div class="flex-1">
+            <div class="font-medium mb-1">Seamless by design</div>
+            <ul class="text-sm space-y-1 text-zinc-400">
+              <li>• Custom UI runs in a sandboxed iframe, but the user never sees it</li>
+              <li>• Updates to the interface propagate automatically to everyone</li>
+              <li>• Same safe sharing model as original Rooms (hash links + QR)</li>
+              <li>• Each room can be exported as its own PWA</li>
+            </ul>
+          </div>
+          <div class="flex-1 text-sm border-l border-zinc-800 pl-6 md:pl-5 text-zinc-400">
+            <div class="font-medium text-white mb-1">The magic</div>
+            “I just described the app I wanted. It looks incredible and when I share the link, my friends’ changes appear instantly. And I still own all the data.”
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom line -->
+    <div class="text-center">
+      <div class="max-w-md mx-auto">
+        <div class="text-xl font-medium tracking-tight">One meta-app.<br>Beautiful custom rooms.<br>Real encrypted sync.<br>No infrastructure hell.</div>
+        <div class="mt-6 text-xs text-zinc-500">The natural evolution of local-first collaborative software.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="border-t border-zinc-800 py-4">
+    <div class="max-w-4xl mx-auto px-6 text-[10px] text-center text-zinc-600">
+      Built for the Custom Rooms vision • Code as encrypted data inside the room • Blind relay • Seamless execution
+    </div>
+  </div>
+
+  <script>
+    // Tailwind script
+    function initializeTailwind() {
+      document.documentElement.style.setProperty('--accent', '#22c55e');
+    }
+    
+    initializeTailwind();
+    
+    // Small interactive touch: clicking the diagram highlights the flow
+    document.addEventListener('click', function(e) {
+      const diagram = e.target.closest('.key-visual');
+      if (diagram) {
+        diagram.style.transitionDuration = '80ms';
+        diagram.style.transform = 'scale(0.985)';
+        setTimeout(() => {
+          diagram.style.transform = '';
+        }, 180);
+      }
+    });
+    
+    // Keyboard hint for investors who might be demoing
+    console.log('%c[Pitch] This page is designed to be read or presented in ~60 seconds. Clean, visual, no scrolling required for core message.', 'color:#3f3f46');
+  </script>
+</body>
+</html>
