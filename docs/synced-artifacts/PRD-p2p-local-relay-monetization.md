@@ -27,6 +27,7 @@ A tiny mandatory signaling service provides the only centralized "on-ramp" for i
 - Custom code runs seamlessly (user never feels the sandbox/iframe).
 - Code updates are just more encrypted data in the room state.
 - Self-hosting options exist at higher tiers, but the default path requires the service.
+- Freemium for small use; payment primarily for creating large-capacity spaces (one-time capacity tokens).
 
 ## 2. Goals & Success Metrics
 

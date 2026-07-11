@@ -149,19 +149,13 @@
 
 <script>
 // =====================================================
-// SPIKE: Synced Artifacts — RSVP Interest Form
-// This demonstrates the *exact* pattern an LLM should generate.
+// SPIKE: Synced Artifacts — RSVP Interest Form (standalone demo)
 // 
-// In the real version:
-//   - Replace the DEMO sections with real initSyncedArtifact() from the kit
-//   - The kit will handle encryption, relay WS, IDB, reconnect, etc.
-//   - All of the code below the "=== APP LOGIC ===" line stays almost identical.
+// Current architecture direction: META SHELL + custom code bundles.
+// Open docs/synced-artifacts/spikes/meta-shell.html for the current spike.
 //
-// Current behavior in this spike:
-//   - Fully functional beautiful UI
-//   - Uses localStorage as a demo "state"
-//   - Simulates sync by listening to storage events (multiple tabs)
-//   - Shows exactly where the real kit calls would go
+// This file is a beautiful standalone reference. The LLM harness now
+// targets the bridge API used inside the meta shell (initRoomBridge).
 // =====================================================
 
 const DEMO_ROOM_KEY = 'demo:rsvp:cabin-weekend';

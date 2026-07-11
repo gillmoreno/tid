@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rooms — Meta Shell (Spike)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .room-card { transition: transform .05s ease, box-shadow .1s; }
+    .room-card:hover { transform: translateY(-1px); }
+    .seamless-iframe {
+      border: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: white;
+      border-radius: 12px;
+    }
+    .shell-container {
+      background: #0a0a0a;
+    }
+    .nav-active { background: #18181b; border-color: #3f3f46; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+  <div class="flex h-screen">
+    <!-- Sidebar: My Rooms -->
+    <div class="w-72 border-r border-zinc-800 flex flex-col">
+      <div class="p-5 border-b border-zinc-800">
+        <div class="flex items-center gap-3">
+          <div class="text-2xl">🏠</div>
+          <div>
+            <div class="font-semibold text-lg tracking-tight">Rooms</div>
+            <div class="text-[10px] text-zinc-500 -mt-0.5">meta shell • spike</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4">
+        <button id="create-btn"
+                class="w-full bg-white text-black font-medium py-2.5 rounded-2xl active:bg-zinc-200 flex items-center justify-center gap-2">
+          <span>＋</span>
+          <span>Create with AI</span>
+        </button>
+        <div class="mt-2 text-[10px] text-zinc-500 px-1">Describe what you need. The harness will generate custom code.</div>
+      </div>
+
+      <div class="flex-1 overflow-auto px-3 pb-4 space-y-1" id="rooms-list">
+        <!-- populated by JS -->
+      </div>
+
+      <div class="p-4 border-t border-zinc-800 text-xs text-zinc-500">
+        <div class="mb-1">All data + code lives in your browser (and peers via relay).</div>
+        <div class="font-mono text-[10px]">vault: localStorage</div>
+      </div>
+    </div>
+
+    <!-- Main area -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <!-- Top bar -->
+      <div class="h-14 border-b border-zinc-800 flex items-center px-5 justify-between bg-zinc-950/80 backdrop-blur">
+        <div class="flex items-center gap-3" id="room-header">
+          <div id="room-title" class="font-medium text-lg">Select or create a room</div>
+          <div id="room-meta" class="text-xs px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400"></div>
+        </div>
+
+        <div class="flex items-center gap-2 text-sm">
+          <button id="simulate-peer-btn"
+                  class="px-3 py-1.5 rounded-xl border border-zinc-700 hover:bg-zinc-900 text-xs">Simulate peer change</button>
+          <button id="share-room-btn"
+                  class="hidden px-3 py-1.5 rounded-xl border border-zinc-700 hover:bg-zinc-900 text-xs">Copy link for this room</button>
+          <button id="update-code-btn"
+                  class="hidden px-3 py-1.5 rounded-xl border border-amber-700 hover:bg-amber-950 text-xs text-amber-400">Update room UI (owner)</button>
+          <button id="export-standalone-btn"
+                  class="hidden px-3 py-1.5 rounded-xl border border-zinc-700 hover:bg-zinc-900 text-xs">Export standalone</button>
+          <div id="connection-badge"
+               class="text-xs px-3 py-1 rounded-full border border-emerald-900 bg-emerald-950 text-emerald-400 flex items-center gap-1.5">
+            <div class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div>
+            <span>Local (simulated)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="flex-1 flex flex-col p-4 overflow-hidden" id="main-content">
+        <div id="empty-state" class="flex-1 flex items-center justify-center text-center text-zinc-500">
+          <div>
+            <div class="text-5xl mb-4 opacity-50">📦</div>
+            <div class="font-medium mb-1">No room open</div>
+            <div class="text-sm max-w-xs">Create a room with AI or pick one from the left.<br>The custom code runs inside a seamless sandboxed iframe.</div>
+            <div class="mt-4 text-[11px] text-zinc-600">Tip: Open this page in a second tab, then interact in one — localStorage simulates the relay pushing updates.</div>
+          </div>
+        </div>
+
+        <!-- The room viewport -->
+        <div id="room-viewport" class="hidden flex-1 flex flex-col min-h-0">
+          <div class="flex items-center justify-between mb-2 px-1">
+            <div class="text-xs uppercase tracking-widest text-zinc-500">Live custom room</div>
+            <div id="room-status" class="text-xs text-emerald-400">synced • 2 members</div>
+          </div>
+
+          <!-- This is where the iframe goes. It must feel native. -->
+          <div class="flex-1 min-h-0 border border-zinc-800 rounded-3xl overflow-hidden bg-white shadow-inner" id="iframe-container">
+            <!-- iframe injected here -->
+          </div>
+
+          <div class="mt-2 text-[10px] text-center text-zinc-500">
+            Code + data are stored encrypted in the room. Updates to UI or data are just more state changes.
+          </div>
+        </div>
+      </div>
+
+      <!-- Owner / debug panel (collapsible) -->
+      <div id="owner-panel" class="hidden border-t border-zinc-800 bg-zinc-950 p-4 text-sm">
+        <div class="flex items-center gap-2 mb-2 text-amber-400">
+          <span>Owner tools</span>
+          <span class="text-[10px] px-1.5 py-px border border-amber-900 rounded">code is data</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <div class="text-xs text-zinc-500 mb-1">Current code bundle size</div>
+            <div id="bundle-size" class="font-mono text-xs text-zinc-400"></div>
+            <button id="publish-code-btn"
+                    class="mt-2 w-full text-xs py-2 rounded-xl border border-amber-700 hover:bg-amber-950 text-amber-400">Publish new UI version to members</button>
+          </div>
+          <div>
+            <div class="text-xs text-zinc-500 mb-1">Edit bundle (dangerous, for demo)</div>
+            <textarea id="bundle-editor" class="w-full h-24 font-mono text-[10px] bg-zinc-950 border border-zinc-800 rounded-xl p-2 text-zinc-300" spellcheck="false"></textarea>
+          </div>
+        </div>
+        <div class="text-[10px] mt-2 text-zinc-500">Changing the bundle here and publishing instantly pushes a new version to everyone (including this view). No deploy step.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create modal -->
+  <div id="create-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+    <div class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-lg p-6">
+      <div class="font-medium mb-1 text-lg">Create a custom room with AI</div>
+      <p class="text-sm text-zinc-400 mb-4">Describe the collaborative tool you want. Example: "shared grocery list with prices and who bought what, beautiful and simple"</p>
+
+      <textarea id="prompt-input" rows="3"
+                class="w-full bg-zinc-950 border border-zinc-700 focus:border-zinc-500 rounded-2xl px-4 py-3 text-sm outline-none"
+                placeholder="A beautiful cabin weekend RSVP with dietary notes, live totals, and comments"></textarea>
+
+      <div class="flex gap-3 mt-4">
+        <button id="cancel-create" class="flex-1 py-2.5 rounded-2xl border border-zinc-700">Cancel</button>
+        <button id="do-create" class="flex-1 py-2.5 rounded-2xl bg-white text-black font-medium">Generate room</button>
+      </div>
+      <div class="text-[10px] text-center mt-3 text-zinc-500">In real life this calls the MCP harness or hosted generator. For the spike we produce a working custom artifact.</div>
+    </div>
+  </div>
+
+<script>
+// ============================================================
+// ROOMS META SHELL SPIKE
+// Demonstrates:
+// - List / open rooms
+// - Custom code loaded as encrypted blob (here: in-memory + localStorage)
+// - Seamless sandboxed iframe + postMessage bridge
+// - Automatic code propagation (publish new UI → iframe reloads with new bundle)
+// - update() from inside room mutates authoritative state
+// - Simulated "sync" + peer changes
+//
+// This is the core of task C + the bridge part of B.
+// ============================================================
+
+// Guard: this spike uses sandboxed iframes + postMessage bridge.
+// It does NOT work when opened as file:// (unique origins break the bridge).
+if (location.protocol === 'file:') {
+  const msg = 'This demo must be served over http:// (file: breaks the sandboxed iframe + postMessage bridge).\n\n' +
+              'Run:  python3 -m http.server 5199 --directory docs/synced-artifacts/spikes\n' +
+              'Then open: http://localhost:5199/meta-shell.html';
+  document.body.innerHTML = '<pre style="padding:2rem;background:#1f1f1f;color:#f87171;font:14px/1.5 monospace;white-space:pre-wrap">' + msg + '</pre>';
+  throw new Error('file: protocol not supported for meta-shell spike');
+}
+
+const STORAGE_KEY = 'rooms-meta-spike-v1';
+
+let vault = loadVault();
+let currentRoomId = null;
+let currentIframe = null;
+let bridgeListeners = new Set();
+
+function getDesiredRoomId() {
+  const hash = location.hash.startsWith('#') ? location.hash.slice(1) : '';
+  const params = new URLSearchParams(hash);
+  return params.get('room') || params.get('r') || localStorage.getItem('rooms-meta-last-room');
+}
+
+function loadVault() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  // Seed with the adapted RSVP demo room
+  const seed = createSeedCabinRoom();
+  const v = { rooms: [seed] };
+  saveVault(v);
+  return v;
+}
+
+function saveVault(v = vault) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(v));
+}
+
+function createSeedCabinRoom() {
+  const roomId = 'cabin-' + Date.now().toString(36);
+  return {
+    id: roomId,
+    title: 'Cabin Weekend RSVP',
+    createdAt: Date.now(),
+    code: {
+      version: 1,
+      bundle: getCabinRoomBundle(), // the custom inner UI code
+      updatedAt: Date.now()
+    },
+    appState: {
+      eventName: "Cabin Weekend",
+      dates: "Aug 15–17 • Lake Tahoe",
+      responses: []
+    },
+    // In real system member info lives in the CRDT too
+    _meta: { ownerId: 'local-owner' }
+  };
+}
+
+// The "custom room bundle" — this is what an LLM would generate.
+// It is pure UI + logic. It calls initRoomBridge() which the shell injects.
+// This is the exact shape the updated harness will target.
+function getCabinRoomBundle() {
+  return `
+    <div class="max-w-2xl mx-auto p-6 bg-zinc-950 text-zinc-200" style="font-family: system-ui, -apple-system, sans-serif;">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center gap-2 mb-3">
+          <span style="font-size: 42px">🏕️</span>
+        </div>
+        <h1 id="event-title" class="text-4xl font-semibold tracking-tight"></h1>
+        <p id="event-dates" class="mt-2 text-xl text-zinc-400"></p>
+        <p class="mt-1 text-sm text-emerald-400">End-to-end encrypted • Lives only on devices</p>
+      </div>
+
+      <div id="status-bar"
+           class="mb-6 flex items-center justify-center gap-2 text-sm px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 w-fit mx-auto">
+        <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+        <span id="status-text">Connected • live</span>
+      </div>
+
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-8">
+        <h2 class="font-medium mb-4 text-lg">Let us know if you're coming</h2>
+        <form id="rsvp-form" class="space-y-4">
+          <div>
+            <label class="block text-sm text-zinc-400 mb-1">Your name</label>
+            <input id="name" type="text" required
+                   class="w-full bg-zinc-950 border border-zinc-700 focus:border-zinc-500 rounded-xl px-4 py-3 text-lg outline-none"
+                   placeholder="Alex Rivera">
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm text-zinc-400 mb-1">Are you coming?</label>
+              <div class="flex gap-2">
+                <button type="button" data-going="true"
+                        class="going-btn flex-1 px-4 py-3 rounded-2xl border border-emerald-500 bg-emerald-500/10 text-emerald-400 font-medium active:scale-[0.985]">
+                  Yes, I'm in
+                </button>
+                <button type="button" data-going="false"
+                        class="going-btn flex-1 px-4 py-3 rounded-2xl border border-zinc-700 hover:border-zinc-500">
+                  Can't make it
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm text-zinc-400 mb-1">How many people?</label>
+              <input id="count" type="number" value="1" min="1" max="6"
+                     class="w-full bg-zinc-950 border border-zinc-700 focus:border-zinc-500 rounded-xl px-4 py-3 text-lg outline-none">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm text-zinc-400 mb-1">Dietary notes or anything else?</label>
+            <textarea id="note" rows="2" placeholder="Vegetarian + no nuts please"
+                      class="w-full bg-zinc-950 border border-zinc-700 focus:border-zinc-500 rounded-2xl px-4 py-3 outline-none"></textarea>
+          </div>
+
+          <button type="submit"
+                  class="w-full bg-white text-black font-medium py-3.5 rounded-2xl active:bg-zinc-200 transition-colors">
+            Send my response
+          </button>
+        </form>
+      </div>
+
+      <div class="mb-8">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <h3 class="font-medium">Who's coming <span id="total-count" class="text-zinc-500 font-normal">(0)</span></h3>
+          <div class="text-xs px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800">live</div>
+        </div>
+        <div id="responses-list" class="space-y-2"></div>
+        <div id="empty-state" class="text-center py-8 text-zinc-500 text-sm border border-dashed border-zinc-800 rounded-2xl">
+          No responses yet. Be the first!
+        </div>
+      </div>
+
+      <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-8 text-sm">
+        <div class="flex justify-between">
+          <div>
+            <div class="text-emerald-400 font-medium" id="going-total">0 going</div>
+            <div class="text-xs text-zinc-500">+ guests</div>
+          </div>
+          <div class="text-right">
+            <div id="total-people" class="font-semibold text-2xl tabular-nums">0</div>
+            <div class="text-[10px] text-zinc-500 -mt-1">total people</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-zinc-800 pt-6">
+        <h3 class="font-medium mb-3 text-sm tracking-wider text-zinc-400">SHARE THIS</h3>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <button id="copy-link"
+                  class="flex-1 flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 active:bg-zinc-950 transition-colors px-5 py-3 rounded-2xl text-sm font-medium">
+            📋 Copy invite link
+          </button>
+          <button id="show-qr"
+                  class="flex-1 flex items-center justify-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 active:bg-zinc-950 transition-colors px-5 py-3 rounded-2xl text-sm font-medium">
+            Show QR code
+          </button>
+        </div>
+        <p class="mt-3 text-[11px] text-center text-zinc-500">
+          Anyone with the link can participate. Code + data travel together.
+        </p>
+      </div>
+    </div>
+
+    <script>
+      // This is the generated custom room code.
+      // It only knows about the bridge. No relay, no crypto.
+      (function() {
+        const room = window.initRoomBridge ? window.initRoomBridge() : null;
+        if (!room) {
+          document.body.innerHTML = '<div style="padding:2rem;color:#f00">Bridge not available — this room must be loaded from the meta shell.</div>';
+          return;
+        }
+
+        let selectedGoing = null;
+
+        function render(state) {
+          const s = state || room.getState() || {};
+          const eventTitle = document.getElementById('event-title');
+          const eventDates = document.getElementById('event-dates');
+          if (eventTitle) eventTitle.textContent = s.eventName || 'Untitled Event';
+          if (eventDates) eventDates.textContent = s.dates || '';
+
+          const responses = s.responses || [];
+
+          const status = document.getElementById('status-text');
+          if (status) status.textContent = 'Connected • live';
+
+          // responses
+          const list = document.getElementById('responses-list');
+          const empty = document.getElementById('empty-state');
+          if (list) list.innerHTML = '';
+          if (responses.length === 0) {
+            if (empty) empty.style.display = 'block';
+          } else {
+            if (empty) empty.style.display = 'none';
+            responses.slice().sort((a,b) => (b.at||0)-(a.at||0)).forEach(r => {
+              const name = r.name || 'Someone';
+              const div = document.createElement('div');
+              div.className = 'bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 flex justify-between items-start';
+              div.innerHTML = \`
+                <div>
+                  <div class="font-medium">\${name}</div>
+                  <div class="text-xs text-zinc-500">\${r.going ? 'Coming' : 'Not coming'} · \${r.count || 1} person\${(r.count||1)>1?'s':''}</div>
+                  \${r.note ? \`<div class="text-sm text-zinc-400 mt-1">"\${r.note}"</div>\` : ''}
+                </div>
+                <div class="text-[10px] text-zinc-500 tabular-nums">\${new Date(r.at || Date.now()).toLocaleDateString([], {month:'short', day:'numeric'})}</div>
+              \`;
+              list.appendChild(div);
+            });
+          }
+
+          const going = responses.filter(r => r.going);
+          const total = going.reduce((sum, r) => sum + (r.count || 1), 0);
+          const gt = document.getElementById('going-total');
+          const tp = document.getElementById('total-people');
+          const tc = document.getElementById('total-count');
+          if (gt) gt.textContent = \`\${going.length} going\`;
+          if (tp) tp.textContent = total;
+          if (tc) tc.textContent = \`(\${responses.length})\`;
+        }
+
+        function setup() {
+          const form = document.getElementById('rsvp-form');
+          const nameInput = document.getElementById('name');
+          const countInput = document.getElementById('count');
+          const noteInput = document.getElementById('note');
+
+          document.querySelectorAll('.going-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+              document.querySelectorAll('.going-btn').forEach(b => b.classList.remove('border-emerald-500', 'bg-emerald-500/10', 'text-emerald-400'));
+              btn.classList.add('border-emerald-500', 'bg-emerald-500/10', 'text-emerald-400');
+              selectedGoing = btn.dataset.going === 'true';
+            });
+          });
+
+          if (form) {
+            form.addEventListener('submit', (e) => {
+              e.preventDefault();
+              if (selectedGoing === null) { alert("Please choose whether you're coming"); return; }
+              const name = (nameInput.value || 'Anonymous').trim();
+              const count = parseInt(countInput.value) || 1;
+              const note = noteInput.value.trim();
+
+              room.update(d => {
+                d.responses = d.responses || [];
+                d.responses.push({
+                  id: 'r_' + Date.now().toString(36),
+                  name,
+                  going: selectedGoing,
+                  count,
+                  note: note || undefined,
+                  by: room.getMemberId(),
+                  at: Date.now()
+                });
+              });
+
+              room.setDisplayName?.(name);
+              form.reset();
+              selectedGoing = null;
+              document.querySelectorAll('.going-btn').forEach(b => b.classList.remove('border-emerald-500','bg-emerald-500/10','text-emerald-400'));
+            });
+          }
+
+          // Share buttons (work inside iframe too — shell can intercept or we use current location later)
+          const copy = document.getElementById('copy-link');
+          if (copy) copy.addEventListener('click', async () => {
+            const url = location.origin + location.pathname + '#c=' + (new URLSearchParams(location.hash.slice(1)).get('c') || 'demo');
+            await navigator.clipboard.writeText(url);
+            const orig = copy.textContent;
+            copy.textContent = '✓ Copied!';
+            setTimeout(() => copy.textContent = orig, 1400);
+          });
+
+          const qr = document.getElementById('show-qr');
+          if (qr) qr.addEventListener('click', () => alert('QR would open here (in real shell we show nice modal)'));
+
+          // Initial + live
+          room.subscribe((s) => render(s));
+          // Seed initial render
+          render(room.getState());
+        }
+
+        setup();
+      })();
+    <\/script>
+  `;
+}
+
+// ============================================================
+// BRIDGE IMPLEMENTATION (injected by shell into every room iframe)
+// Provides the exact API the custom code (and harness) expects.
+// ============================================================
+function createBridgeScript() {
+  return `
+    <script>
+      (function() {
+        let _state = {};
+        let _memberId = 'm_' + Math.random().toString(36).slice(2, 10);
+        let _listeners = [];
+        let _displayNames = {};
+
+        function postToParent(msg) {
+          window.parent.postMessage({ __roomsBridge: true, ...msg }, '*');
+        }
+
+        window.initRoomBridge = function() {
+          // Tell parent we are ready and want initial state
+          setTimeout(() => postToParent({ type: 'ready' }), 10);
+
+          window.addEventListener('message', function(ev) {
+            const data = ev.data;
+            if (!data || !data.__roomsBridge) return;
+            if (data.type === 'state') {
+              _state = data.state || {};
+              _listeners.forEach(fn => {
+                try { fn(getState(), data.status || {loaded:true, connected:true}); } catch(e){}
+              });
+            }
+          });
+
+          function getState() {
+            try { return structuredClone ? structuredClone(_state) : JSON.parse(JSON.stringify(_state)); }
+            catch { return JSON.parse(JSON.stringify(_state)); }
+          }
+
+          function getStatus() {
+            return { loaded: true, connected: true };
+          }
+
+          function update(mutator) {
+            const draft = getState();
+            try {
+              mutator(draft);
+            } catch (e) {
+              console.error('mutator error', e);
+              return;
+            }
+            // Optimistic local
+            _state = draft;
+            // Tell shell
+            postToParent({ type: 'update', state: draft });
+            // Notify local listeners immediately
+            _listeners.forEach(fn => { try { fn(getState(), getStatus()); } catch{} });
+          }
+
+          function subscribe(listener) {
+            _listeners.push(listener);
+            try { listener(getState(), getStatus()); } catch {}
+            return () => { _listeners = _listeners.filter(l => l !== listener); };
+          }
+
+          function getMemberId() { return _memberId; }
+
+          function setDisplayName(name) {
+            _displayNames[_memberId] = name;
+            postToParent({ type: 'display-name', name });
+          }
+
+          function getDisplayName(id = _memberId) {
+            return _displayNames[id];
+          }
+
+          return {
+            getState,
+            update,
+            subscribe,
+            getMemberId,
+            getStatus,
+            setDisplayName,
+            getDisplayName
+          };
+        };
+
+        // Also expose a tiny helper for future
+        window.__roomsBridgeReady = true;
+      })();
+    <\/script>
+  `;
+}
+
+// ============================================================
+// Shell logic: load rooms, render list, open room in iframe + bridge
+// ============================================================
+
+function renderRoomsList() {
+  const container = document.getElementById('rooms-list');
+  container.innerHTML = '';
+
+  vault.rooms.forEach(room => {
+    const isActive = room.id === currentRoomId;
+    const el = document.createElement('div');
+    el.className = `room-card px-3 py-3 rounded-2xl border cursor-pointer flex items-center gap-3 text-sm ${isActive ? 'nav-active border-zinc-600' : 'border-zinc-800 hover:bg-zinc-900'}`;
+    el.innerHTML = `
+      <div class="flex-1 min-w-0">
+        <div class="font-medium truncate">${room.title}</div>
+        <div class="text-[10px] text-zinc-500">v${room.code.version} • ${room.appState.responses ? room.appState.responses.length : 0} responses</div>
+      </div>
+      <div class="text-right text-[10px] text-zinc-500 tabular-nums">${new Date(room.createdAt).toLocaleDateString([], {month:'short', day:'numeric'})}</div>
+    `;
+    el.onclick = () => openRoom(room.id);
+    container.appendChild(el);
+  });
+
+  if (vault.rooms.length === 0) {
+    container.innerHTML = `<div class="text-xs text-zinc-500 px-3 py-6">No rooms yet. Create one.</div>`;
+  }
+}
+
+function openRoom(roomId) {
+  const room = vault.rooms.find(r => r.id === roomId);
+  if (!room) return;
+
+  currentRoomId = roomId;
+  localStorage.setItem('rooms-meta-last-room', roomId);
+
+  // Make the URL shareable for this specific room (so "copy link, open new tab" works)
+  const newHash = '#room=' + encodeURIComponent(roomId);
+  if (location.hash !== newHash) {
+    history.replaceState(null, '', newHash);
+  }
+
+  // Update header
+  document.getElementById('room-title').textContent = room.title;
+  document.getElementById('room-meta').textContent = `v${room.code.version}`;
+
+  document.getElementById('empty-state').classList.add('hidden');
+  document.getElementById('room-viewport').classList.remove('hidden');
+  document.getElementById('owner-panel').classList.remove('hidden');
+
+  // Show owner / share tools
+  document.getElementById('share-room-btn').classList.remove('hidden');
+  document.getElementById('update-code-btn').classList.remove('hidden');
+  document.getElementById('export-standalone-btn').classList.remove('hidden');
+
+  // Build iframe content
+  const container = document.getElementById('iframe-container');
+  container.innerHTML = '';
+
+  const iframe = document.createElement('iframe');
+  iframe.className = 'seamless-iframe';
+  iframe.sandbox = 'allow-scripts allow-forms allow-modals';
+
+  // Build srcdoc: bridge first + custom bundle
+  const bridge = createBridgeScript();
+  // We put the bundle (which contains its own <div> + <script>) inside body.
+  // The bundle already has a top level div with styles.
+  const srcdoc = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  ${bridge}
+</head>
+<body style="margin:0;background:#0a0a0a;color:#e4e4e7">
+  ${room.code.bundle}
+</body>
+</html>`;
+
+  iframe.srcdoc = srcdoc;
+  container.appendChild(iframe);
+  currentIframe = iframe;
+
+  // Wire bridge messages from this iframe
+  setupBridgeForCurrentIframe(iframe, room);
+
+  // Push initial state
+  setTimeout(() => {
+    sendStateToIframe(room);
+  }, 80);
+
+  // Populate owner editor
+  document.getElementById('bundle-editor').value = room.code.bundle;
+  document.getElementById('bundle-size').textContent = room.code.bundle.length + ' chars';
+
+  renderRoomsList();
+}
+
+function setupBridgeForCurrentIframe(iframe, room) {
+  // Remove old global listener if any (simple approach: one at a time)
+  window.removeEventListener('message', window.__roomsCurrentBridgeHandler);
+
+  const handler = (ev) => {
+    const data = ev.data;
+    if (!data || !data.__roomsBridge) return;
+
+    const iframeWin = iframe.contentWindow;
+    if (!iframeWin) return;
+
+    if (data.type === 'ready') {
+      // Send current authoritative state + member info
+      sendStateToIframe(room);
+    }
+
+    if (data.type === 'update') {
+      // Child proposed a new app state (from update() call)
+      const newAppState = data.state;
+      if (newAppState && currentRoomId === room.id) {
+        // Apply authoritatively
+        room.appState = newAppState;
+        saveVault();
+
+        // In real system: this would go through the sync kit -> relay -> merge -> broadcast
+        // Here we immediately push to the iframe (and would push to other open shells)
+        sendStateToIframe(room);
+
+        // Update list counts etc
+        renderRoomsList();
+      }
+    }
+
+    if (data.type === 'display-name') {
+      // Could store per-member display names
+    }
+  };
+
+  window.__roomsCurrentBridgeHandler = handler;
+  window.addEventListener('message', handler);
+}
+
+function sendStateToIframe(room) {
+  if (!currentIframe || !currentIframe.contentWindow) return;
+
+  const payload = {
+    __roomsBridge: true,
+    type: 'state',
+    state: room.appState || {},
+    status: { loaded: true, connected: true }
+  };
+
+  try {
+    currentIframe.contentWindow.postMessage(payload, '*');
+  } catch (e) {}
+}
+
+function simulatePeerChange() {
+  if (!currentRoomId) return;
+  const room = vault.rooms.find(r => r.id === currentRoomId);
+  if (!room) return;
+
+  // Pretend a remote person added a response
+  const responses = room.appState.responses || [];
+  responses.push({
+    id: 'peer_' + Date.now().toString(36),
+    name: ['Jordan', 'Taylor', 'Sam', 'Casey'][Math.floor(Math.random()*4)],
+    going: Math.random() > 0.3,
+    count: Math.random() > 0.7 ? 2 : 1,
+    note: Math.random() > 0.6 ? 'Excited!' : undefined,
+    by: 'peer-remote',
+    at: Date.now()
+  });
+  room.appState.responses = responses;
+  saveVault();
+
+  sendStateToIframe(room);
+  renderRoomsList();
+}
+
+function publishCodeUpdate(newBundle) {
+  if (!currentRoomId) return;
+  const room = vault.rooms.find(r => r.id === currentRoomId);
+  if (!room) return;
+
+  room.code.version = (room.code.version || 1) + 1;
+  room.code.bundle = newBundle;
+  room.code.updatedAt = Date.now();
+  saveVault();
+
+  // Because code lives in the room state, any member opening this room gets the new bundle.
+  // For the currently open view: reload the iframe with the new bundle.
+  document.getElementById('room-meta').textContent = `v${room.code.version}`;
+  document.getElementById('bundle-size').textContent = newBundle.length + ' chars';
+
+  // Re-open the room (this rebuilds iframe with latest bundle + pushes latest appState)
+  const id = currentRoomId;
+  currentRoomId = null; // force
+  openRoom(id);
+
+  // Visual confirmation
+  const badge = document.getElementById('room-status');
+  const old = badge.textContent;
+  badge.textContent = 'UI published to all members';
+  setTimeout(() => { badge.textContent = old; }, 1600);
+
+  renderRoomsList();
+}
+
+// ============================================================
+// Creation flow (stub for the real LLM harness)
+// ============================================================
+
+function showCreateModal() {
+  const modal = document.getElementById('create-modal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  document.getElementById('prompt-input').focus();
+}
+
+function hideCreateModal() {
+  const modal = document.getElementById('create-modal');
+  modal.classList.remove('flex');
+  modal.classList.add('hidden');
+}
+
+function createRoomFromPrompt(promptText) {
+  const trimmed = (promptText || '').trim();
+  let title = 'New Room';
+  let bundle = getSimpleGenericBundle(trimmed);
+
+  if (/rsvp|coming|attend|invite/i.test(trimmed)) {
+    title = 'RSVP';
+    bundle = getCabinRoomBundle();
+  } else if (/expense|cost|split|money|dinner/i.test(trimmed)) {
+    title = 'Shared Expenses';
+    bundle = getExpensesRoomBundle();
+  } else if (/list|todo|grocery|shopping/i.test(trimmed)) {
+    title = 'Shared List';
+    bundle = getTodoRoomBundle();
+  }
+
+  const newRoom = {
+    id: 'room-' + Date.now().toString(36),
+    title: title + (trimmed ? ' — ' + trimmed.slice(0, 28) : ''),
+    createdAt: Date.now(),
+    code: {
+      version: 1,
+      bundle,
+      updatedAt: Date.now()
+    },
+    appState: {},
+    _meta: { ownerId: 'local-owner' }
+  };
+
+  // Give a couple sensible defaults
+  if (title.includes('RSVP')) {
+    newRoom.appState = { eventName: trimmed || 'Event', dates: 'Soon', responses: [] };
+  }
+  if (title.includes('Expenses')) {
+    newRoom.appState = { title: trimmed || 'Group Expenses', expenses: [], currency: 'USD' };
+  }
+  if (title.includes('List')) {
+    newRoom.appState = { title: trimmed || 'List', items: [] };
+  }
+
+  vault.rooms.unshift(newRoom);
+  saveVault();
+  renderRoomsList();
+  hideCreateModal();
+
+  // Immediately open it
+  setTimeout(() => openRoom(newRoom.id), 30);
+}
+
+// A couple of extra simple room bundles to show variety
+function getExpensesRoomBundle() {
+  return `
+    <div class="max-w-xl mx-auto p-6 bg-white text-zinc-950" style="font-family: system-ui;">
+      <h1 class="text-3xl font-semibold mb-1">Group Expenses</h1>
+      <p class="text-zinc-500 mb-6">Everyone pays their share. Live balances.</p>
+
+      <form id="exp-form" class="flex gap-2 mb-6">
+        <input id="who" placeholder="Who paid" class="flex-1 border rounded-xl px-4 py-2">
+        <input id="amt" type="number" step="0.01" placeholder="Amount" class="w-28 border rounded-xl px-4 py-2">
+        <input id="desc" placeholder="For what" class="flex-1 border rounded-xl px-4 py-2">
+        <button class="bg-black text-white px-6 rounded-2xl">Add</button>
+      </form>
+
+      <div id="exp-list" class="space-y-2 mb-6"></div>
+
+      <div class="bg-zinc-100 rounded-2xl p-4 text-sm">
+        <div id="balances"></div>
+      </div>
+
+      <script>
+        (function(){
+          const room = window.initRoomBridge ? window.initRoomBridge() : {getState:()=> ({}), update:()=>{}, subscribe:()=>{}, getMemberId:()=> 'demo'};
+          function render() {
+            const s = room.getState() || {};
+            const exps = s.expenses || [];
+            const list = document.getElementById('exp-list');
+            list.innerHTML = exps.map(e => \`<div class="flex justify-between border-b py-1 text-sm"><div>\${e.who} paid <strong>\${e.amt}</strong> for \${e.desc}</div><div class="text-xs text-zinc-500">\${new Date(e.at).toLocaleTimeString()}</div></div>\`).join('');
+            
+            // naive balances
+            const bals = {};
+            exps.forEach(e => { bals[e.who] = (bals[e.who]||0) + Number(e.amt); });
+            const total = Object.values(bals).reduce((a,b)=>a+b,0);
+            const share = exps.length ? total / exps.length : 0;
+            const balEl = document.getElementById('balances');
+            balEl.innerHTML = 'Total: $' + total.toFixed(2) + ' • Per person ~ $' + share.toFixed(2);
+          }
+          const form = document.getElementById('exp-form');
+          form.onsubmit = (e) => {
+            e.preventDefault();
+            const who = document.getElementById('who').value || 'Anon';
+            const amt = parseFloat(document.getElementById('amt').value) || 0;
+            const desc = document.getElementById('desc').value || 'stuff';
+            room.update(d => { d.expenses = d.expenses || []; d.expenses.push({who, amt, desc, at: Date.now()}); });
+            form.reset();
+          };
+          room.subscribe(render);
+          render();
+        })();
+      <\/script>
+    </div>
+  `;
+}
+
+function getTodoRoomBundle() {
+  return `
+    <div class="max-w-xl mx-auto p-6 bg-white text-zinc-950" style="font-family: system-ui;">
+      <h1 class="text-3xl font-semibold">Shared List</h1>
+      <p class="mb-4 text-zinc-500">Add items. Check them off together.</p>
+
+      <div class="flex gap-2 mb-4">
+        <input id="item-input" class="flex-1 border rounded-2xl px-4 py-2" placeholder="Add something...">
+        <button id="add-btn" class="px-6 rounded-2xl bg-black text-white">Add</button>
+      </div>
+
+      <div id="items" class="space-y-1"></div>
+
+      <script>
+        (function(){
+          const room = window.initRoomBridge ? window.initRoomBridge() : {getState:()=>{},update:()=>{},subscribe:()=>{}};
+          function render() {
+            const s = room.getState() || {};
+            const items = s.items || [];
+            const el = document.getElementById('items');
+            el.innerHTML = items.map((it,i) => \`
+              <div class="flex items-center gap-3 px-3 py-2 border rounded-2xl \${it.done ? 'line-through opacity-60' : ''}">
+                <input type="checkbox" \${it.done ? 'checked' : ''} data-i="\${i}">
+                <div class="flex-1">\${it.text}</div>
+                <button data-del="\${i}" class="text-xs text-red-500">delete</button>
+              </div>\`).join('');
+            
+            el.querySelectorAll('input[type=checkbox]').forEach(cb => {
+              cb.onchange = () => {
+                const i = +cb.dataset.i;
+                room.update(d => { d.items[i].done = cb.checked; });
+              };
+            });
+            el.querySelectorAll('button[data-del]').forEach(b => {
+              b.onclick = () => {
+                const i = +b.dataset.del;
+                room.update(d => { d.items.splice(i,1); });
+              };
+            });
+          }
+          document.getElementById('add-btn').onclick = () => {
+            const val = document.getElementById('item-input').value.trim();
+            if (!val) return;
+            room.update(d => { d.items = d.items || []; d.items.push({text:val, done:false}); });
+            document.getElementById('item-input').value = '';
+          };
+          room.subscribe(render);
+          render();
+        })();
+      <\/script>
+    </div>
+  `;
+}
+
+function getSimpleGenericBundle(prompt) {
+  return `
+    <div class="max-w-lg mx-auto p-8 bg-white text-zinc-950" style="font-family: system-ui;">
+      <h1 class="text-2xl font-semibold mb-2">Custom Room</h1>
+      <p class="text-sm text-zinc-500 mb-6">${(prompt || 'A beautiful custom collaborative space').replace(/</g,'&lt;')}</p>
+      <div class="p-4 bg-zinc-100 rounded-2xl text-sm">
+        This room was generated from your description.<br>
+        It uses <code>room.update()</code> for all changes.
+      </div>
+      <button id="demo-action" class="mt-6 px-5 py-2 bg-black text-white rounded-2xl">Do something</button>
+      <div id="log" class="mt-3 text-xs text-zinc-500"></div>
+      <script>
+        (function(){
+          const room = window.initRoomBridge ? window.initRoomBridge() : {update:()=>{},getState:()=>{},subscribe:()=>{}};
+          document.getElementById('demo-action').onclick = () => {
+            room.update(d => { d.clicks = (d.clicks||0) + 1; });
+          };
+          room.subscribe(s => {
+            const l = document.getElementById('log');
+            if (l) l.textContent = 'Clicks: ' + (s.clicks || 0);
+          });
+        })();
+      <\/script>
+    </div>
+  `;
+}
+
+// ============================================================
+// Wire up UI events
+// ============================================================
+
+function initUI() {
+  // Rooms list
+  renderRoomsList();
+
+  // Create flow
+  document.getElementById('create-btn').addEventListener('click', showCreateModal);
+  document.getElementById('cancel-create').addEventListener('click', hideCreateModal);
+  document.getElementById('do-create').addEventListener('click', () => {
+    const val = document.getElementById('prompt-input').value;
+    createRoomFromPrompt(val);
+  });
+
+  // Simulate peer
+  document.getElementById('simulate-peer-btn').addEventListener('click', simulatePeerChange);
+
+  // Owner update code button (opens the panel editor focus)
+  document.getElementById('update-code-btn').addEventListener('click', () => {
+    const editor = document.getElementById('bundle-editor');
+    editor.focus();
+    editor.select();
+  });
+
+  document.getElementById('publish-code-btn').addEventListener('click', () => {
+    const editorVal = document.getElementById('bundle-editor').value;
+    if (!editorVal.trim()) {
+      alert('Bundle cannot be empty');
+      return;
+    }
+    publishCodeUpdate(editorVal);
+  });
+
+  // Share a link that will make another tab open the exact same room (for demoing sync)
+  const shareBtn = document.getElementById('share-room-btn');
+  shareBtn.addEventListener('click', async () => {
+    if (!currentRoomId) return;
+    const url = location.origin + location.pathname + '#room=' + encodeURIComponent(currentRoomId);
+    await navigator.clipboard.writeText(url);
+    const orig = shareBtn.textContent;
+    shareBtn.textContent = '✓ Copied!';
+    setTimeout(() => shareBtn.textContent = orig, 1400);
+  });
+
+  // Export current room as a standalone single-file HTML (basic version of post-MVP path)
+  document.getElementById('export-standalone-btn').addEventListener('click', () => {
+    if (!currentRoomId) return;
+    const room = vault.rooms.find(r => r.id === currentRoomId);
+    if (!room) return;
+
+    const standalone = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${room.title}</title>
+<script src="https://cdn.tailwindcss.com"><\/script>
+<style>body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}</style>
+</head><body class="bg-zinc-950 text-zinc-200">
+${room.code.bundle}
+<script>
+// Minimal standalone shim so the bundle's initRoomBridge() calls work.
+// In real kit this would be the full initSyncedArtifact with crypto + relay.
+(function(){
+  if (window.initRoomBridge) return;
+  let state = ${JSON.stringify(room.appState)};
+  const listeners = [];
+  const member = 'm_' + Math.random().toString(36).slice(2,10);
+  window.initRoomBridge = function(){
+    function getState(){ try{return structuredClone(state);}catch{return JSON.parse(JSON.stringify(state));} }
+    function update(mut){ const d=getState(); mut(d); state=d; listeners.forEach(l=>l(getState(),{loaded:true,connected:false})); }
+    function subscribe(fn){ listeners.push(fn); fn(getState(),{loaded:true,connected:false}); return ()=>{}; }
+    return { getState, update, subscribe, getMemberId:()=>member, getStatus:()=>({loaded:true,connected:false}), setDisplayName:()=>{}, getDisplayName:()=> 'You (offline export)' };
+  };
+})();
+<\/script>
+</body></html>`;
+
+    const blob = new Blob([standalone], {type: 'text/html'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (room.title || 'room').toLowerCase().replace(/\s+/g,'-') + '.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // Keyboard niceties
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && document.activeElement.tagName === 'BODY') {
+      e.preventDefault();
+      const first = document.querySelector('#rooms-list .room-card');
+      if (first) first.click();
+    }
+  });
+
+  // Auto-open: prefer hash (?room= or #room=), then last opened, then first
+  if (vault.rooms.length > 0 && !currentRoomId) {
+    setTimeout(() => {
+      const desired = getDesiredRoomId();
+      const target = desired && vault.rooms.find(r => r.id === desired) ? desired : vault.rooms[0].id;
+      openRoom(target);
+    }, 120);
+  }
+
+  // Cross-tab "sync" simulation (localStorage events)
+  // When another tab/shell instance saves the vault, we refresh here.
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY) {
+      try {
+        vault = JSON.parse(e.newValue || '{}');
+        renderRoomsList();
+
+        if (currentRoomId) {
+          const still = vault.rooms.find(r => r.id === currentRoomId);
+          if (still) {
+            if (currentIframe && currentIframe.contentWindow) {
+              sendStateToIframe(still);
+            } else {
+              // Second tab may not have rendered the iframe yet — force it
+              openRoom(currentRoomId);
+            }
+          }
+        }
+      } catch {}
+    }
+  });
+
+  console.log('%c[Rooms Meta Shell] Spike ready. Create rooms or edit the open room\'s UI live.', 'color:#666');
+}
+
+initUI();
+</script>
+</body>
+</html>

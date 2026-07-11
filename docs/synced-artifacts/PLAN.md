@@ -1,6 +1,14 @@
 # Synced Artifacts / Custom Rooms — Plan (Refined)
 
-**STATUS: COMMITTED** (git 9075308 on 2026-07-10)
+**STATUS: COMMITTED + MVP SPIKE BUILT** (2026-07-11)
+
+Spike progress:
+- `spikes/meta-shell.html` — full meta shell with list, AI-create stub, seamless iframe + bridge, live code publish, simulated peer sync.
+- Bridge implemented and documented.
+- LLM prompt + KIT-SPEC + supporting notes updated for the meta-app + code-as-blob model.
+- MCP harness spec stub added.
+
+Next: real client kit transport, real relay integration for the shell, iterative harness, PWA manifest for the shell itself.
 
 See also: 
 - P2P-RELAY-IDEA.md (exploration)
@@ -72,6 +80,8 @@ The pure "standalone single HTML" path is de-emphasized. The stronger model is a
 **The core worry**: Old Rooms was simple because each room was basically structured JSON data stored in the Yjs document (meta + template.* maps). No real "code deployment". Everything was data.
 
 **The equivalent here**: Treat the **entire custom frontend** as just another piece of (encrypted) data inside the room.
+
+**User direction (2026-07-11)**: The meta-app ("app of apps") itself should be installable as a browser PWA and work offline. Individual spaces should be able to live independently in the user's browser (as PWAs or inside the meta PWA) without ongoing dependence on the central domain for daily use. The central domain is primarily for creation, invite distribution, and signaling bootstrap. Once a space exists, data entry, viewing, and sync (when online) happen locally/P2P in the browser.
 
 #### Storage Model ("Code as Encrypted Data")
 - In the room's state (the same encrypted Yjs doc / op log the relay sees):
@@ -227,10 +237,11 @@ This keeps the "app of apps" spirit of original Rooms while allowing real custom
 - `docs/synced-artifacts/PLAN.md` (this, refined for meta-app model)
 - `docs/synced-artifacts/LLM-HARNESS-PROMPT.md` (update for meta-shell + PWA export + MCP)
 - `docs/synced-artifacts/KIT-SPEC.md` + shell bridge
-- `docs/synced-artifacts/spikes/` (adapt RSVP as loadable room + new meta-shell spike)
-- Security & loading model notes
-- MCP harness spec
-- PWA export mechanics notes
-- Possibly integrate relay or reference the Go code from the-idea-guy/projects/rooms/relay/
+- `docs/synced-artifacts/spikes/meta-shell.html` (primary spike: meta shell + bridge + code blob loading)
+- `docs/synced-artifacts/MCP-HARNESS.md`
+- `docs/synced-artifacts/SECURITY-AND-SANDBOX.md`
+- Security & loading model notes (done)
+- PWA export mechanics notes (later)
+- Possibly integrate relay or reference the Go code...
 
 Start executing A/B/C/D autonomously after this plan is reviewed in conversation.
