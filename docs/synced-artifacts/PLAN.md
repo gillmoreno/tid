@@ -1,31 +1,74 @@
 # Synced Artifacts / Custom Rooms — Plan (Refined)
 
-**STATUS: COMMITTED + MVP SPIKE BUILT** (2026-07-11)
+**STATUS: STABILIZED LOCAL-FIRST ROOM DEMO IMPLEMENTED** (2026-07-12)
 
-Spike progress:
-- `spikes/meta-shell.html` — full meta shell with list, AI-create stub, seamless iframe + bridge, live code publish, simulated peer sync.
-- Bridge implemented and documented.
-- LLM prompt + KIT-SPEC + supporting notes updated for the meta-app + code-as-blob model.
-- MCP harness spec stub added.
+The current implementation is `meta-app/`, a React/Vite application served on
+`http://localhost:5200`. It has same-host routes `/`, `/rooms/:roomId`, and
+`/join/:inviteId`. Room navigation stays in the application; the old
+`about:blank`/`document.write` popup flow is not used.
 
-Next: real client kit transport, real relay integration for the shell, iterative harness, PWA manifest for the shell itself.
+The only generated bundle today is a fake shared counter. It runs in a sandboxed
+iframe through a narrow bridge with a per-load nonce, `event.source` checks,
+strict schemas and payload limits. The iframe has no `allow-same-origin`, and
+its CSP includes `connect-src 'none'`.
+
+Implemented local-first and transport behavior:
+- An IndexedDB vault stores the room `CryptoKey`, encrypted code bundle and
+  state, applied operation IDs, outbox, sync cursors, and room/device
+  credentials. Local updates commit to this vault before sync is attempted.
+- AES-GCM encrypts checkpoints, operation payloads, and signaling envelopes in
+  the browser. `roomDataKey` is never sent to the signaling or mailbox API.
+- Sharing is split into a public locator URL and a separately shared private
+  `roompkg1` package. The package contains the one-time `inviteSecret`, room and
+  owner-device identity, and the wrapped room data key. Only `inviteSecret` is
+  submitted when redeeming the invite.
+- Signaling API v2 provides durable rooms and member seats, owner capability,
+  one-time expiring/revocable invites, hashed credentials, idempotent
+  redemption, room-scoped device discovery, deterministic session-scoped
+  addressed signals, and opaque encrypted mailboxes. Prototype/admin/dev
+  routes are disabled.
+- Capacity counts unique admitted members. Reconnects, ICE candidates, offers,
+  answers, and mailbox traffic do not consume seats.
+- A room-wide encrypted checkpoint lets a new member join while the owner is
+  offline. Per-device encrypted operation mailboxes provide asynchronous
+  delivery. A WebRTC DataChannel provides live P2P delivery when both demo
+  peers are online.
+
+The honest product model is **client-canonical, E2EE, and P2P-first, with blind
+encrypted store-and-forward fallback**. It is not accurate to claim that no
+room data bytes are ever stored on the server: the mailbox retains ciphertext
+under TTL and quota limits. The server can also observe room/device identifiers,
+membership, timing, and message sizes.
+
+`docs/synced-artifacts/spikes/meta-shell.html` is a historical bridge and UX
+spike only. It is not the canonical implementation and its signup/login,
+bootstrap-counter, and popup behavior must not be used as evidence for the
+current capability-based demo.
+
+Current demo scope is two peers. Multi-peer mesh, TURN, code signing plus
+version migration/rollback, real AI/MCP generation, mobile background
+operation, production billing/accounts, member removal/key rotation, and
+standalone PWA export remain future work.
 
 See also: 
 - P2P-RELAY-IDEA.md (exploration)
 - PRD-p2p-local-relay-monetization.md (detailed build spec with checklists)
 
 **Locked decisions:**
-- Mandatory signaling service for all initial connections (no free pure-P2P bypass).
-- Local relay runs on user devices; actual data/code sync is P2P.
-- Monetization primarily via the signaling service (tiers + self-host at higher levels).
+- Service-mediated admission and rendezvous remain the product gate.
+- Clients remain canonical and use live P2P when available, with a blind
+  encrypted mailbox for offline/reliability fallback.
+- Monetization can cover admission/invite policy, signaling/rendezvous,
+  TURN/reliability, and encrypted mailbox quotas. It cannot stop an admitted
+  peer from copying room data or implementing another transport.
 
-This architecture direction is locked in per discussion:
-- Code stored directly as compressed encrypted blob in room state
-- Automatic UI updates to members
+This long-term architecture direction remains locked:
+- Treat code as encrypted room data; compression and version handling still
+  require implementation.
+- Propagate validated UI updates automatically once code update safeguards
+  exist.
 - Seamless transparent execution (iframe hidden from user)
 - Meta-app centralizes everything; no per-room Git or subdomains
-
-Ready for next (crazier) ideas.
 
 **Core Vision (updated 2026-07-09):**  
 A modern take on the original "Rooms" idea — **a meta-app that contains many custom apps ("rooms")**. 
@@ -33,16 +76,18 @@ A modern take on the original "Rooms" idea — **a meta-app that contains many c
 - The meta-app (the "Rooms shell") provides the social layer, vault, contacts, room management, QR/links, and background sync.
 - Each "room" inside it can be **arbitrary custom frontend code** (React, Svelte, vanilla, etc.) generated via an AI harness.
 - No more schema constraints killing the design. Full visual and interaction freedom per room.
-- Every custom room still gets E2EE sync + client-owned data via the same dumb blind relay model that made original Rooms powerful.
-- Each custom room can potentially be installed as its own PWA.
+- Every custom room still gets E2EE sync + client-owned data through live P2P
+  and a blind encrypted store-and-forward fallback.
+- Standalone installation/export for an individual room remains a future path.
 - LLM harness is first-class, with a path for users to bring their own AI (MCP/tool calling) to avoid the builder bearing generation costs.
 
 This keeps everything great about Rooms (relay blindness, ownership, easy sharing via safe links + QR, solo-first, small-group collab) while fixing the main shortcoming: lack of custom beautiful UIs.
 
 **Core invariants (non-negotiable):**
-- All data over the wire is encrypted. The relay is completely blind (same as original Rooms).
+- All content over the wire is encrypted. The service is content-blind but can
+  observe transport and membership metadata.
 - Clients hold the canonical data.
-- Relay is self-hostable (start with the proven Go implementation).
+- The service is self-hostable; production packaging and support are future work.
 - LLM harness is first-class. Users should be able to bring their own AI (MCP/tool) so the builder doesn't pay for generation.
 - Full custom code freedom per room (no schemas that dictate UI).
 - Small-to-medium scope per room: forms to 3-5 "page" collab tools (expenses, lists, polls, light boards, etc.).
@@ -53,27 +98,37 @@ This keeps everything great about Rooms (relay blindness, ownership, easy sharin
 The pure "standalone single HTML" path is de-emphasized. The stronger model is a **meta-app** (Rooms-like shell) that hosts many custom-code rooms.
 
 ### Meta-App Structure ("An app that has custom apps")
-- Central shell (React/Vite PWA, similar to current tid or original Rooms web).
-- Users see "My Rooms", create new ones via AI harness, manage vault, contacts, etc.
-- Each room loads/runs its own custom frontend code + the thin sync kit.
+- Central React/Vite shell (implemented in `meta-app/`; standalone PWA export is
+  not part of this demo).
+- The intended product lets users see "My Rooms", create via an AI harness,
+  and manage a vault and social layer. The current demo implements local room
+  listing/creation without AI generation or contacts.
+- The current room loads the fake-counter bundle; arbitrary custom frontends
+  remain the target.
 - The shell provides consistent social layer (safe links, QR, member profiles, invites) while the room itself is fully custom.
 - Analogy to original Rooms: one meta experience, many independent "apps" (now with arbitrary code instead of templates/schemas).
 
 ### Custom Code Loading & Security
-- Custom code must be loadable safely inside (or alongside) the meta-app.
-- Options to explore: sandboxed iframes + postMessage bridge for the sync kit, Web Workers, or treating each room as an installable sub-PWA.
-- The generated code must be "room-ready": it calls the standard sync kit API and expects a roomCode from the shell or URL hash.
+- The fake counter bundle is loaded into a sandboxed iframe with scripts only;
+  it does not receive same-origin authority.
+- The parent bridge validates the iframe window via `event.source`, requires a
+  fresh per-load nonce, enforces a versioned message schema and payload limits,
+  and only accepts `getState`, `update`, and `subscribe`.
+- The generated document's CSP denies network connections and all undeclared
+  resources. It communicates only through the parent bridge.
 
 ### Creation Flow
-- Inside the meta-app (or via external MCP/tool): user describes the desired room ("beautiful RSVP for cabin trip with live counts and dietary notes").
-- Harness (AI) generates the custom code bundle.
-- Code is "installed" into the user's vault as a new room (stored encrypted, associated with a relay room ID).
-- User can immediately open it, share it, etc.
+- In the current demo, the user names a room and chooses its unique-member
+  capacity. The client creates the durable server room and capability, generates
+  the fake-counter bundle and room data key, encrypts the initial bundle/state,
+  stores them locally, creates one invite, and uploads an encrypted room
+  checkpoint.
+- Real AI/MCP generation is intentionally not implemented yet.
 
 ### PWA per Room
-- Promising idea: each custom room can be exported/installed as its own standalone PWA.
-- Benefits: full app icon, better storage guarantees, feels like a real dedicated app.
-- The meta-app can help generate the manifest + standalone bundle (with the sync kit + room secrets injected safely via hash).
+- Exporting/installing a room as its own standalone PWA is a post-demo feature.
+- Future export must preserve capability admission, key separation, sandboxing,
+  and local-first storage; it must not inject durable secrets into public URLs.
 
 ### Deployment, Code Storage, Sandboxing & "The JSON Equivalent" (Critical Section)
 
@@ -81,167 +136,153 @@ The pure "standalone single HTML" path is de-emphasized. The stronger model is a
 
 **The equivalent here**: Treat the **entire custom frontend** as just another piece of (encrypted) data inside the room.
 
-**User direction (2026-07-11)**: The meta-app ("app of apps") itself should be installable as a browser PWA and work offline. Individual spaces should be able to live independently in the user's browser (as PWAs or inside the meta PWA) without ongoing dependence on the central domain for daily use. The central domain is primarily for creation, invite distribution, and signaling bootstrap. Once a space exists, data entry, viewing, and sync (when online) happen locally/P2P in the browser.
+**User direction (2026-07-11):** The meta-app should eventually be installable
+and offline-capable, with standalone room export as a later option. The current
+demo keeps data entry and canonical state local but still uses the centralized
+service for admission, rendezvous, encrypted offline bootstrap, and encrypted
+mailbox delivery.
 
 #### Storage Model ("Code as Encrypted Data")
-- In the room's state (the same encrypted Yjs doc / op log the relay sees):
-  - `code`: { version: number, bundle: string (compressed), updatedAt, updatedBy }
-    - `bundle` = the full self-contained frontend. Stored directly as a blob in the room state.
-  - Plus the normal runtime data: `data.responses`, `data.expenses`, etc.
-- When the AI harness "creates" a room, it generates the initial `code.bundle` and writes it into the state via the normal `update()` mechanism.
-- Updating the UI later = owner does another `update` that replaces `code.bundle` with a new version.
-- **Compression**: Bundle will be compressed (e.g. gzip) before storage/encryption. Real-world perf (load time, snappiness, storage size) needs validation with actual generated bundles.
-- **Encryption**: The code blob is encrypted with the exact same room key as the runtime data before it ever leaves the client or hits the relay. The relay sees another opaque encrypted frame. No difference.
-- **Centralization without sprawl**:
-  - No Git repo per room.
-  - No subdomain per room.
-  - Everything for a room (its code + its data) lives in one relay room ID.
-  - The meta-app is the single hosted PWA that knows how to load any room.
-
-**User decision (2026-07-10)**: Store the code blob directly in the room state (compressed). Performance, loading feel, and serving snappiness to be measured in practice.
+- IndexedDB is the local canonical vault. It stores the `CryptoKey`, encrypted
+  fake-counter bundle and state, operation IDs, outbox, mailbox/signal cursors,
+  member credential, and owner capability where applicable.
+- The bundle and state are encrypted separately with AES-GCM. A room-wide,
+  AES-GCM-encrypted checkpoint contains those encrypted values plus bootstrap
+  metadata, allowing first join while existing clients are offline.
+- Counter increments become uniquely identified encrypted operations. The
+  local encrypted state, applied-ID set, and outbox entry are persisted before
+  synchronization starts.
+- There is no Yjs/CRDT document, compression pipeline, code publishing/version
+  history, migration, or rollback in the current demo.
+- The long-term decision remains to treat generated code as encrypted room
+  data, without a Git repository or subdomain per room. Compression and
+  versioning must be validated when real generated bundles are introduced.
 
 #### Loading a Custom Room in the Meta-App
-1. User opens a room from the meta-app shell (using the normal roomCode + sync kit).
-2. Shell receives the full state (including the current `code.bundle`).
-3. Shell creates a **sandboxed iframe** (for isolation):
-   - `sandbox="allow-scripts allow-forms allow-modals"`
-   - Uses `srcdoc` or blob URL from the (decrypted) bundle.
+1. User opens `/rooms/:roomId`; the shell loads the encrypted room record from
+   its IndexedDB vault.
+2. The shell decrypts and validates the fake-counter bundle descriptor and
+   current counter state.
+3. Shell creates a **sandboxed iframe** with `sandbox="allow-scripts"` and
+   `srcDoc`; `allow-same-origin` is deliberately absent.
 4. Establishes a **postMessage bridge** (strictly validated):
-   - The iframe receives state, member info, status.
-   - The iframe sends only approved `update()` mutations.
-5. The custom code inside the iframe uses a tiny bridge library that feels identical to the normal kit:
-   ```js
-   const room = initRoomBridge(); // postMessage under the hood
-   room.update(d => { d.responses.push(...) });
-   room.subscribe(s => render(s));
-   ```
-6. The shell owns the real sync kit, persistence, and relay. The bridge is invisible to the end user.
+   - Both sides validate the source window and per-load nonce.
+   - The iframe receives counter state and can request only `getState`,
+     `update({type: "counter.increment"})`, or `subscribe`.
+5. The fake-counter bundle contains the small bridge client and updates through
+   `postMessage`; an arbitrary mutator API is not implemented.
+6. The shell owns persistence, cryptography, signaling/mailbox access, and
+   WebRTC. The bridge is invisible to the end user.
 
-**User decisions (2026-07-10)**:
-- Code updates are pushed automatically to members (no "accept" step).
-- The iframe + bridge must be completely transparent — the user should not perceive any difference from a native app.
-- Sandboxing will be used for safety; the exact strictness (pros/cons of tighter vs looser policies) needs further discussion. The goal is strong isolation while keeping the experience seamless.
+The long-term UX decision remains that validated code updates should propagate
+without an accept step and the bridge should feel native. Code update
+propagation is not implemented by this fake-counter demo.
 
-#### Versioning & "Deployment"
-- Versioning is just state updates. Every time the owner changes the UI, they publish a new `code.version`.
-- Because it's inside the CRDT/op-log, other devices get the new code automatically when they sync.
-- History of code versions lives in the room (you can roll back if wanted).
-- No separate deploy step. "Deploying" a new UI = updating the code field in the room state.
-- **User decision**: Members automatically receive the new UI. No "accept version" prompt.
+#### Versioning & "Deployment" (Future)
+- Future generated bundles need signed/provenanced versions, schema migration,
+  compatibility checks, and rollback. None is implemented in the demo.
+- The intended product behavior remains automatic propagation after those
+  safeguards exist; there is no current owner publish flow.
 
 #### Sandboxing Details (iframe + postMessage)
-- We use a sandboxed iframe + postMessage bridge for isolation.
-- **User note**: The exact level of strictness needs more discussion (pros/cons of tighter policies). The goal is strong security while making the experience feel completely native.
-- The bridge must feel invisible:
-  - Custom code inside the iframe should not perceive any difference from running natively.
-  - Strict message validation on the parent side.
-  - No direct DOM or relay access leaked to the iframe.
-- Since code originates from the room owner (via AI), risk is contained.
+- Implemented restrictions are documented in `SECURITY-AND-SANDBOX.md`.
+- The opaque-origin iframe cannot access the shell DOM, vault, credentials,
+  room key, signaling client, or network. The parent owns persistence, crypto,
+  admission, mailbox, and P2P transport.
+- Owner provenance alone is not a security boundary. Future arbitrary
+  generated code still needs signing/provenance and migration policy.
 
-#### Standalone / Exported PWA Path (Post-MVP)
-- Export to standalone PWA or user self-hosted site is explicitly out of MVP scope.
-- Nice-to-have for later: users can create their own PWAs or host rooms on their own websites using the same code-blob + local-relay technology.
-- For MVP: everything lives inside the meta-app. No export flow required.
+#### Standalone / Exported PWA Path (Future)
+- Export to a standalone PWA or user-hosted site is not in the implemented
+  demo. All rooms currently run inside the meta-app.
+- This is one future portability path, not an MVP success criterion.
 
-#### Why This Avoids the Nightmares
-- Endless GitHub repo? Code lives encrypted inside the room's relay data. No source control sprawl unless the user explicitly exports.
-- Subdomain per app? One meta-app domain. All rooms are just different relay room IDs + different code blobs inside their state.
-- Deployment complexity? Updating a room's UI is the same operation as adding a response — a normal encrypted state update.
+### Sharing and Admission
+- The share locator is public:
+  `/join/:inviteId`.
+- The private material is a separately shared, bounded `roompkg1` package with
+  the one-time invite secret, room ID, owner device ID, and room key wrapped by
+  an invite-derived AES-GCM key.
+- The service receives the invite secret for redemption but never receives the
+  room data key. The client validates package/route identity, server room and
+  owner identity, checkpoint metadata, and decrypted bundle/state before
+  writing the joined room to IndexedDB.
+- There are no signup/login accounts in this demo. Room membership uses
+  possession-based owner and member capabilities stored as hashes server-side.
 
-This keeps the "app of apps" spirit of original Rooms while allowing real custom code. The "JSON" has been upgraded to "encrypted code bundle + data".
+### Current State and Sync Model
+- The fake counter uses idempotent operation IDs and deterministic application,
+  which is enough for concurrent increments in the two-peer demo. It is not a
+  general CRDT.
+- Local state is canonical. Each update is persisted to IndexedDB before the
+  synchronizer sends it.
+- If both peers are online, encrypted operations can flow over an ordered
+  WebRTC DataChannel. The same encrypted operations are also placed in
+  recipient-addressed mailboxes for asynchronous convergence.
+- The signaling service stores encrypted signaling envelopes and mailbox
+  ciphertext durably with TTL and quota. It cannot decrypt them.
 
-**User decisions locked (2026-07-10)**:
-- Store code blob directly in room state (with compression; real perf to be validated).
-- Automatic propagation of code updates to all members.
-- The bridge experience must be seamless — no visible iframe artifacts for end users.
+## Stabilized Demo Success Criteria
+- React/Vite shell on `:5200` supports `/`, `/rooms/:roomId`, and
+  `/join/:inviteId` without popup routing.
+- A capacity-two room can be created, privately invited, joined from an
+  isolated browser vault while the owner is offline, and reopened later.
+- A wrong invitation package is rejected without persisting a room.
+- Repeating redemption from the same admitted device is idempotent and keeps
+  `memberCount=2`; a third unique member is rejected.
+- Both browser vaults converge through mailbox fallback and establish a live
+  P2P DataChannel when simultaneously online.
+- Concurrent counter increments converge.
 
-### LLM Harness & Cost Model
-- First-class.
-- Strong preference to avoid the operator bearing AI generation costs.
-- Primary path: expose the harness as an **MCP server / tool** so users connect their own Claude, Grok, local models, etc.
-- Secondary: optional hosted generation inside the meta-app (with clear costs or limits).
-- The harness must output code that works inside the meta-app (embedded via the bridge). Support for exported standalone PWAs is post-MVP.
+## Verified Evidence (2026-07-12)
+Run the signaling service:
 
-### Sharing & Social
-- Inherit the best of original Rooms: URL hash for secrets, client-side QR, WhatsApp-friendly links, member attribution.
-- Two main sharing modes:
-  1. Via the meta-app (deep link like `/room/abc123` — recipient must have the meta-app or it prompts install).
-  2. As a standalone PWA/exported bundle (recipient opens the link or installs directly).
-- Discovery inside the meta-app (contacts, recent rooms, etc.) is a nice-to-have.
+```sh
+cd signaling
+go run . -addr=:8081 -db=./signaling.db
+```
 
-### 1. CRDT
-(kept from previous; see full details in NOTES file) Default to simple op-log for most generated rooms. Optional stronger merging hidden in the kit. Relay remains byte-agnostic.
+Run the frontend:
 
-### 2. Deployment & Hosting
-- Meta-app itself is hosted (one PWA).
-- Individual rooms: either run inside the meta-app shell or exported as their own static + PWA bundles.
-- Pure raw single-file HTML is still possible for maximum portability but is no longer the primary target.
-- Storage: Full IndexedDB power when running as hosted PWA (meta or per-room).
+```sh
+cd meta-app
+npm run dev
+```
 
-### 3. State / Sync Model
-- Keep relay exactly as-is (Go, framed encrypted blobs, checkpoints, limits).
-- Client kit exposes a tiny, stable, LLM-friendly API (e.g. `update(mutator)`, `getState()`, `subscribe`, `getMemberId()`).
-- All business logic, UI, derived views stay 100% in the generated frontend code.
-- Encryption + framing can reuse (or closely mirror) the rooms room-kit crypto + relayProtocol.
+Verification commands:
 
-## Tasks (A, B, C, D) — Updated for Meta-App Direction
+```sh
+cd signaling
+go test ./... -count=1
+go test -race ./...
 
-**A. LLM Harness (first-class, MCP-friendly)**
-- System prompt + few-shot that produces "room code" suitable for both:
-  - Loading inside a meta-app shell.
-  - Export as standalone PWA.
-- Must include: proper use of the sync kit, safe hash-based sharing, member attribution, PWA manifest hints, graceful loading states.
-- Support for being called via MCP/tool (structured output that can be consumed by Claude/Cursor/etc.).
+cd ../meta-app
+npm test
+npm run lint
+npm run build
+npm run test:e2e
+```
 
-**B. Minimal Client Sync Kit + Shell Bridge**
-- Tiny API for custom room code (`update`, `getState`, `subscribe`, etc.).
-- Works when the room runs inside the meta-shell (via postMessage or direct injection) **and** standalone.
-- Local persistence strategy that works for both modes.
-- Sharing helpers (build safe link with hash, QR generation).
+The Go suite and race detector pass. The frontend has 16 passing tests across
+seven files; lint and production build pass. The real-browser vertical slice
+passes offline first join, wrong invite not persisted, idempotent reconnect
+with `memberCount=2`, third unique member rejection, same-host routing,
+mailbox convergence, live P2P connection, and concurrent counter convergence.
+`npm run test:e2e` requires Python Playwright and system Chrome, with servers
+running on ports 8081 and 5200.
 
-**C. Meta-App Shell Spike + Room Integration**
-- Basic meta-app shell (list of rooms, create via harness stub, open a room).
-- Demonstrate loading a custom code "room" (start with the existing RSVP spike adapted).
-- Per-room PWA export flow (generate manifest + standalone bundle).
-- Vault + room management using the same patterns as original Rooms.
+## Later Work
+- Multi-peer mesh beyond the current two-peer selection.
+- TURN and production-grade connectivity/reliability.
+- Signed bundle provenance, versioning, state migration, compatibility, and
+  rollback.
+- Real AI/MCP generation and iterative room refinement.
+- Mobile background operation.
+- Production accounts, billing, quotas, and operational controls.
+- Member removal plus room-key rotation.
+- Standalone PWA export and self-hosted room packaging.
+- Broader generated-app merge semantics beyond the counter operation model.
 
-**D. Supporting Work**
-- Security model for loading custom code (iframes? sandboxing?).
-- MCP server/tool definition (how users connect their own AI).
-- Cost model notes (user pays for their AI calls).
-- Social layer inheritance (deep links inside meta-app vs exported PWAs, contacts/personas).
-- Relay: still the Go one; multiple custom rooms just use different derived IDs.
-- PWA export mechanics and storage guarantees.
-- Deployment: where the meta-app lives (inside tid? separate?).
-- Sharing UX exploration (meta-app links vs standalone installs).
-
-## Success Criteria (MVP)
-- A meta-app shell exists where a user can "create room with AI" (via harness stub or MCP simulation) and get a working custom-code room.
-- The custom room has full UI freedom, uses the sync kit, and syncs via the blind Go relay.
-- Sharing works (safe hash links + QR) both inside the meta-app and for exported standalone versions.
-- At least one room can be exported/installed as its own PWA.
-- Data ownership invariants preserved (E2EE, client storage, self-hostable relay).
-
-## Open Questions & Later Work
-- Full hosting flow + cost model.
-- Real MCP server implementation for the harness.
-- Sandboxing story for custom code in the meta-app (iframe + postMessage details, threat model).
-- Iterative refinement loop inside the shell ("this looks good, make the colors warmer and add a total at top").
-- When / how to support exporting a room as a fully independent PWA vs always requiring the meta-app.
-- Cross-room features (contacts, personas) from original Rooms.
-- Where this lives in the tid / the-idea-guy ecosystem.
-- Performance: code bundle size limits, compression, lazy loading of code.
-- Migration / evolution of a room's code over long periods.
-
-## Files to Create / Modify (initial)
-- `docs/synced-artifacts/PLAN.md` (this, refined for meta-app model)
-- `docs/synced-artifacts/LLM-HARNESS-PROMPT.md` (update for meta-shell + PWA export + MCP)
-- `docs/synced-artifacts/KIT-SPEC.md` + shell bridge
-- `docs/synced-artifacts/spikes/meta-shell.html` (primary spike: meta shell + bridge + code blob loading)
-- `docs/synced-artifacts/MCP-HARNESS.md`
-- `docs/synced-artifacts/SECURITY-AND-SANDBOX.md`
-- Security & loading model notes (done)
-- PWA export mechanics notes (later)
-- Possibly integrate relay or reference the Go code...
-
-Start executing A/B/C/D autonomously after this plan is reviewed in conversation.
+The historical `spikes/meta-shell.html` remains useful as a design reference,
+but `meta-app/` and `signaling/` are the implementation evidence as of
+2026-07-12.

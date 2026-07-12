@@ -1,0 +1,17 @@
+{
+  "name": "Roomworks",
+  "short_name": "Rooms",
+  "description": "Local-first encrypted collaborative rooms",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eee9dc",
+  "theme_color": "#171a16",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,206 +1,255 @@
-# Synced Artifacts — Client Kit Spec & API
+# Synced Artifacts — Implemented Client Kit and Bridge
 
-**Purpose:** Tiny stable API for custom rooms. Any generated (or hand-written) frontend can read/write encrypted synced state without knowing about relays, encryption, or persistence.
+**Status:** Stabilized fake-counter implementation
+**Implementation baseline:** 2026-07-12
 
-In the committed model:
-- A single meta-app shell hosts many custom-code rooms.
-- The room's full state (including `code.bundle` + app data) is stored encrypted.
-- Custom code runs in a sandboxed iframe using a postMessage bridge that feels identical to the real kit.
-- Code updates are normal state updates and propagate automatically.
+## Purpose and Scope
 
-The kit (and bridge) produce framed encrypted bytes compatible with the Go relay.
+The current kit proves one local-first room type end to end. It does not yet
+provide the previously proposed generic `initSyncedArtifact()` API, arbitrary
+mutator functions, Yjs/CRDT compatibility, standalone operation, AI-generated
+bundles, code publishing, or code migration.
 
-## Design Goals
-- Extremely small surface for LLMs and humans.
-- Works in a single self-contained HTML (minimal or zero external deps preferred for the MVP kit).
-- All heavy lifting (encryption, WS, reconnect, local persistence, basic merging) hidden.
-- Pluggable backend merge strategy (start simple; Yjs can be swapped in later behind the same API for stronger cases).
-- Data ownership: everything encrypted at rest on the wire; clients are source of truth.
+The only generated bundle is a fake shared counter. The parent React/Vite shell
+owns storage, cryptography, admission, mailbox synchronization, and WebRTC.
+Generated code runs inside a sandboxed iframe and can interact only through the
+counter bridge.
 
-## High-Level Architecture (for the kit implementer)
+## Runtime Layout
 
-```
-Your beautiful custom code (React / Svelte / vanilla)
-        ↕  (plain objects + update() calls)
-tiny public API  (initSyncedArtifact, getState, update, subscribe, ...)
-        ↕
-kit internals:
-  - derive room id + encryption key (from roomCode + optional passphrase)
-  - local persistence (IndexedDB preferred + localStorage fallback)
-  - WS connection + framing (same MSG_UPDATE / MSG_CHECKPOINT as rooms)
-  - encrypt/decrypt (AES-GCM + Argon or SHA, same as rooms crypto)
-  - simple op log or snapshot merge
-  - reconnect logic, status
-        ↕
-Blind Go relay (only sees framed ciphertext)
+```text
+fake-counter iframe (opaque origin)
+        ↕ postMessage: getState / increment / subscribe
+React/Vite shell
+        ├─ IndexedDB vault (canonical local room)
+        ├─ AES-GCM crypto
+        ├─ outbox, operation IDs, mailbox/signal cursors
+        ├─ signaling API v2 and encrypted mailbox
+        └─ WebRTC DataChannel when both peers are online
 ```
 
-The kit can start by re-using (or re-implementing in a small self-contained way) the good parts from rooms:
-- relayProtocol framing
-- crypto (derive, encrypt, decrypt)
-- The overall LocalFirstDoc pattern, but with a simpler state model
+The application runs at `http://localhost:5200` with routes `/`,
+`/rooms/:roomId`, and `/join/:inviteId`. Room opening does not create an
+`about:blank`/`document.write` popup.
 
-## Public API (what generated code and templates will call)
+## Generated Bundle Contract
+
+The encrypted bundle descriptor currently has one shape:
 
 ```ts
-interface SyncedArtifactOptions {
-  relayUrl?: string;           // default to our hosted one
-  appId?: string;              // e.g. "artifacts" or "forms"
-  passphrase?: string;         // optional extra secret (Argon2id path)
+type CodeBundle = {
+  version: 1
+  kind: 'counter'
+  title: string
 }
-
-interface ArtifactStatus {
-  loaded: boolean;             // local state ready
-  connected: boolean;
-  error?: string;
-}
-
-interface SyncedArtifact {
-  getState<T = any>(): T;
-  update(mutator: (draft: any) => void): void;   // or (draft) => newState
-  subscribe(listener: (state: any, status: ArtifactStatus) => void): () => void;
-  getMemberId(): string;
-  getStatus(): ArtifactStatus;
-  setDisplayName(name: string): void;
-  getDisplayName(id?: string): string | undefined;
-
-  // Optional advanced / owner
-  unlockAdmin?(secret: string): void;
-  compact?(): Promise<void>;     // ask kit to send a checkpoint
-}
-
-// Bootstrap
-function initSyncedArtifact(opts?: SyncedArtifactOptions): SyncedArtifact;
 ```
 
-### Usage Patterns the LLM Will Be Taught
+After decrypting and validating this descriptor, the shell generates the
+self-contained fake-counter HTML. A fresh nonce is created on each render and
+used by both its CSP and bridge protocol.
 
-```js
-const art = initSyncedArtifact();
+The iframe is rendered with:
 
-// Read
-let current = art.getState();
-
-// Write (recommended style)
-art.update(draft => {
-  draft.responses = draft.responses || [];
-  draft.responses.push({ id: Date.now().toString(36), name: "Gil", going: true });
-});
-
-// React to changes (re-render your UI)
-const unsub = art.subscribe((state, status) => {
-  if (status.loaded) {
-    myRenderFunction(state);
-  }
-  updateConnectionBadge(status);
-});
-
-// Attribution
-const me = art.getMemberId();
+```html
+<iframe sandbox="allow-scripts" srcdoc="...">
 ```
 
-Alternative simpler style (if we decide on it):
-```js
-art.setState(newState);   // full replace (last write wins style)
+There is no `allow-same-origin`. The generated document has an opaque origin
+and a CSP that includes:
+
+```text
+default-src 'none'
+script-src 'nonce-…'
+style-src 'nonce-…'
+connect-src 'none'
+img-src 'none'
+font-src 'none'
+object-src 'none'
+base-uri 'none'
+form-action 'none'
 ```
 
-We will pick one primary style and document it clearly in the harness.
+## Bridge Protocol
 
-## State Shape & Merging Strategy (MVP — Simple)
+Requests are versioned messages on channel `meta-room`. Every request must:
 
-- The state the app sees is a plain object you design.
-- On local change the kit records:
-  - A full snapshot, or
-  - An operation (recommended for collab): `{ type: 'append' | 'set', path or key, value, by: memberId, ts }`
-- On receiving remote data, the kit merges:
-  - For simple cases: take newer timestamp per top-level key or append to lists.
-  - Deterministic rules so all clients converge.
-- The kit also periodically sends a compacted "current state" checkpoint (so the relay log doesn't grow forever).
+- originate from the exact iframe `Window` (`event.source` validation);
+- carry the current per-load nonce;
+- use protocol version 1 and type `bridge.request`;
+- have a bounded request ID;
+- stay within the 8 KiB parent-side message limit;
+- match the method-specific schema exactly.
 
-This is deliberately simpler than full Yjs for most generated artifacts.
+Implemented methods:
 
-Later: behind the same `update()` API we can plug in a real CRDT document when the app opts in (`initSyncedArtifact({ strongMerge: true })`).
+```ts
+type RoomBridge = {
+  getState(): Promise<{ value: number }>
+  update(operation: { type: 'counter.increment' }): Promise<{ value: number }>
+  subscribe(listener: (state: { value: number }) => void): () => void
+}
+```
 
-## Persistence Strategy
+The iframe also checks `event.source === parent`, channel, version, and nonce
+before accepting responses or state events. The parent disconnects old
+subscriptions when the frame changes.
 
-- Primary: IndexedDB (like rooms) — good capacity and survives tabs closing.
-- Fallback / for very simple single-file cases: localStorage or even in-memory + relay replay.
-- The kit chooses automatically based on environment.
-- For hosted artifacts on a real origin → excellent IDB experience.
-- Data is **not** encrypted at rest on the device (user trusts their browser). Only the wire is encrypted.
+This is intentionally not a generic arbitrary-object mutation API. That API
+remains future work.
 
-## Encryption & Room Identity (inherited from Rooms)
+## IndexedDB Vault
 
-- Same derivation:
-  - Public channel from roomCode.
-  - Optional stronger with passphrase (Argon2id for key and relay room id).
-- Secrets only ever appear in the URL hash when sharing.
-- The kit reads the room identifier from `location.hash` (or accepts it in options).
+The local vault database is `meta-room-vault`. It stores:
 
-## Framing & Wire Protocol
+- stable device ID, private device identity, and label;
+- room ID, title, capacity, role, member ID, and device ID;
+- member credential and, for owners, owner capability;
+- owner device ID;
+- the AES-GCM `roomDataKey` as a `CryptoKey`;
+- encrypted bundle and encrypted room state;
+- applied operation IDs;
+- durable local outbox items;
+- operation mailbox cursor and per-session signaling cursors;
+- invitation locator/package data retained by the owner.
 
-Use (or copy) the exact rooms framing so we get compatibility for free:
-- `MSG_UPDATE` (0x00) for incremental
-- `MSG_CHECKPOINT` (0x01) for full compacted state
-- `MSG_SYNC_END` from relay
+Room writes are serialized per room. `CryptoKey` storage relies on IndexedDB
+structured cloning.
 
-The payload after the tag is encrypted bytes. The relay never looks inside.
+There is no localStorage fallback in the implemented demo. Local room bundle
+and state are encrypted at rest in IndexedDB; credentials and metadata remain
+available to the application origin.
 
-## Reconnect, Offline, Status
+## Persist-Before-Sync Update Path
 
-- Same good behavior as Rooms LocalFirstDoc:
-  - Exponential backoff + jitter
-  - Reconnect on online / visibilitychange
-  - Status events so the UI can show "Connected", "Offline — changes will sync later"
+For every counter increment:
 
-## Error & Edge Cases the Kit Must Handle
+1. Generate a unique operation ID.
+2. Decrypt the current local counter state.
+3. Ignore the operation if its ID was already applied.
+4. Apply `delta: 1`.
+5. AES-GCM encrypt the new state and operation payload.
+6. In one serialized local flow, store the encrypted state, applied operation
+   ID, and outbox entry in IndexedDB.
+7. Notify local subscribers.
+8. Wake synchronization only after persistence completes.
 
-- No relay reachable → still load from local, allow edits.
-- Corrupt local data → reset gracefully or fall back.
-- Very large state → basic size warnings + compaction hook.
-- Multiple tabs on same device → last writer or simple broadcast channel coordination (nice-to-have).
+Remote operations are decrypted, schema-validated, deduplicated by operation
+ID, applied, and persisted before subscribers are notified.
 
-## Self-Contained / Inlining Notes (critical for single HTML)
+The fake counter converges under concurrent increments because each valid,
+unique operation is additive. This does not establish general conflict
+resolution for arbitrary room state.
 
-- The kit should be publishable as a single small JS file that can be inlined via `<script>`.
-- Prefer Web Crypto (no extra libs for encryption).
-- For QR in the generated apps we will include a tiny QR generator or document how to add one.
-- Keep total kit size under ~15-20kB gzipped if possible for the MVP.
+## Cryptography and Invitation Keys
 
-## Versioning & Evolution
+- `roomDataKey` is a generated 256-bit AES-GCM `CryptoKey`.
+- Bundle, state, operations, checkpoints, and signaling payloads use AES-GCM
+  with random 96-bit IVs and context-specific authenticated additional data.
+- The private invitation package uses prefix `roompkg1.`.
+- Its `inviteSecret` derives the AES-GCM key that wraps `roomDataKey`.
+- The raw room data key never reaches signaling or mailbox endpoints.
 
-- The kit should be versioned.
-- State inside can carry a `schemaVersion` if the generated app wants.
-- We promise backward compatibility for the public API.
+Sharing uses two separate values:
 
-## Implementation Phases for the Kit
+- Public locator: `/join/:inviteId`.
+- Private `roompkg1` package: invite secret, room identity, owner device
+  identity, and wrapped room key.
 
-1. Core: init, getState, update (full replace), subscribe, basic localStorage persistence, WS connect + framing + encrypt/decrypt skeleton.
-2. Add IndexedDB persistence.
-3. Add simple op log + deterministic merge.
-4. Reconnect logic, status, memberId generation.
-5. Checkpoint sending.
-6. (Optional) passphrase support.
-7. Polish + inlining script.
-8. Later: optional Yjs path.
+The joiner checks package size and schema, requires the package invite ID to
+match the route, redeems the one-time invite, validates the server room and
+owner, decrypts and validates the room-wide checkpoint, and only then writes
+the room to IndexedDB. A wrong invite is not persisted.
 
-This kit + the harness prompt + one good spike is enough to let an LLM produce working artifacts.
+## Checkpoint and Mailbox Sync
 
-## Security / Trust Notes (for docs)
+The client encrypts a room checkpoint containing:
 
-- The relay operator cannot read content.
-- If you lose all devices that have the local data + the room code, the data is gone (by design — same as Rooms).
-- Self-host the relay to remove even the blind relay operator.
+- title and capacity;
+- encrypted bundle;
+- encrypted state;
+- applied operation IDs;
+- checkpoint creation time.
 
-## Two Modes (same public surface)
+The signaling service stores this as one room-wide opaque envelope, allowing a
+new admitted member to bootstrap while the owner and all existing members are
+offline.
 
-1. **Direct / Standalone** — the full kit (`initSyncedArtifact`) does crypto, persistence (IDB), WS / P2P to relay.
-2. **Bridge mode (meta shell)** — `initRoomBridge()` is injected by the shell. It looks identical to the caller. All updates flow through `postMessage` to the shell, which owns the real kit + relay connection. The iframe is invisible to the end user.
+Each local outbox operation is posted as an opaque encrypted envelope to every
+other admitted device's mailbox. Recipients poll with a durable operation
+cursor, apply unseen operations, and update the room-wide checkpoint. The
+service enforces TTL, payload, and record quotas.
 
-The public API contract (`getState`, `update(mutator)`, `subscribe`, `getMemberId`, `getStatus`, display names) is stable across both.
+## Live P2P
 
-See `spikes/meta-shell.html` for the current reference bridge implementation + seamless iframe loading.
+For the current two-peer demo:
 
-## Reference Implementation Location (when built)
+- Room-scoped device discovery selects the other admitted device.
+- A deterministic session ID is derived from room ID and the sorted device IDs.
+- The lexically earlier device creates the ordered DataChannel.
+- Offer, answer, and ICE payloads are AES-GCM encrypted client-side before
+  being sent as addressed signaling envelopes.
+- Once connected, the DataChannel carries encrypted operation payloads.
+- Mailbox delivery remains the asynchronous fallback and does not consume room
+  capacity.
 
-Initial implementation lives in `docs/synced-artifacts/spikes/`. `meta-shell.html` is the canonical spike for the committed meta-app + code-as-blob model.
+There is no multi-peer mesh or TURN support yet.
+
+## Signaling Capability Model
+
+There are no signup/login accounts in this implementation.
+
+- The owner capability administers invitations.
+- Member bearer credentials authenticate room, device, signaling, and mailbox
+  calls.
+- The server stores only hashes of capabilities, invite secrets, device
+  identities, credentials, and idempotency keys.
+- Invite redemption is transactional and idempotent.
+- Capacity counts unique durable admitted members only.
+
+## Run and Verification
+
+```sh
+cd signaling
+go run . -addr=:8081 -db=./signaling.db
+```
+
+```sh
+cd meta-app
+npm run dev
+```
+
+```sh
+cd signaling
+go test ./... -count=1
+go test -race ./...
+
+cd ../meta-app
+npm test
+npm run lint
+npm run build
+npm run test:e2e
+```
+
+Verified on 2026-07-12: Go tests and race detector pass; 16 frontend tests
+across seven files pass; lint and build pass; and the real-browser vertical
+slice passes offline first join, failed-invite non-persistence, idempotent
+reconnect with two members, third-member rejection, same-host routing, mailbox
+convergence, live P2P, and concurrent counter convergence.
+
+The E2E command requires Python Playwright and system Chrome, with servers on
+ports 8081 and 5200.
+
+## Future Kit Work
+
+- Generic generated-room API and real AI/MCP generation.
+- Multi-peer mesh and TURN.
+- Bundle signing/provenance, version negotiation, migration, and rollback.
+- General CRDT/merge behavior.
+- Member removal and room-key rotation.
+- Mobile background synchronization.
+- Production accounts, billing, and policy enforcement.
+- Standalone PWA export.
+
+`docs/synced-artifacts/spikes/meta-shell.html` is historical/reference material,
+not the canonical implementation. `meta-app/src/rooms/` is the current client
+implementation.

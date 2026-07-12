@@ -21,6 +21,7 @@ go-backend/factory
 
 # Runtime data
 data/
+signaling/signaling.db
 loops/clip-to-post/drafts/
 loops/clip-to-post/.env
 loops/clip-to-post/config.local.env
