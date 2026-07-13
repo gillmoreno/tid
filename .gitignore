@@ -27,6 +27,13 @@ signaling/signaling.db
 loops/clip-to-post/drafts/
 loops/clip-to-post/.env
 loops/clip-to-post/config.local.env
+loops/article-to-post/drafts/
+loops/article-to-post/.env
+loops/article-to-post/config.local.env
+
+# Drafts and temporary outputs (never commit user drafts or temp artifacts)
+drafts/
+loops/clip-to-post/tmp*.json
 
 # OS
 .DS_Store
