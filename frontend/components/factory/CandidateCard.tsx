@@ -40,9 +40,9 @@ const REFINE_PRESETS = [
       "End with a sharp curiosity-driving question — e.g. what does this mean, who can we trust, what's the alternative for teams that cannot spend hundreds of thousands on infra.",
   },
   {
-    label: "Add my angle",
+    label: "Gil's take",
     instruction:
-      "Rewrite with Gil's skeptical-curious voice: what would have to be true for this to matter, and what should a smart reader conclude?",
+      "Format C commentary: open with Gil's skeptical-curious opinion — what he thinks this means, agrees with, or pushes back on. Anchor in one concrete thing the speaker said. Not a neutral summary or full quote. End with implication or sharp question.",
   },
   {
     label: "Build the argument",
@@ -53,6 +53,11 @@ const REFINE_PRESETS = [
     label: "Quote mode",
     instruction:
       "Format B: optional topic header, then tight quote in the speaker's voice — story, reversal, thesis, contrast, punchline. Keep vivid phrases. Tag people and companies with @ handles.",
+  },
+  {
+    label: "Humanize",
+    instruction:
+      "Humanize this post. Remove the AI stylistic fingerprints so it reads like clean, natural human writing by a careful person. Strip boilerplate openers, inflated diction (leverage, robust, crucial, landscape, etc.), mechanical parallel structures and tricolons, uniform sentence length, em-dash overload, empty hedging, and restate-everything conclusions. Vary rhythm hard — mix long clauses with short sentences and fragments. Keep every real claim, number, name, and meaning exactly. Do not invent facts, quotes, or anecdotes. Flag gaps instead of filling them. End result should feel like the same content written by a slightly uneven, opinionated human, not a model.",
   },
 ] as const;
 
@@ -297,7 +302,7 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
         <div className="rounded-md border border-line/80 bg-ink/50 p-3">
           <label className="font-mono text-xs uppercase tracking-wider text-signal">Refine</label>
           <p className="mt-1 text-sm text-fog">
-            Add your angle — curiosity, skepticism, a question. Uses your biases above.
+            Add Gil's take — use "Gil's take" or type your opinion in the box below (e.g. "I think harness beats model size here because…"). Uses biases above.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {REFINE_PRESETS.map((preset) => (
@@ -323,7 +328,7 @@ export function CandidateCard({ candidate, onUpdated, onScheduled }: CandidateCa
                   handleRefine(refineInstruction);
                 }
               }}
-              placeholder="Custom instruction — e.g. make it about trust in Anthropic for small teams"
+              placeholder="Your take — e.g. I think they're wrong about ROI; the real story is pricing power, not AI spend"
               className="min-w-[240px] flex-1 rounded-md border border-line bg-ink px-3 py-2.5 text-sm text-white placeholder:text-fog/60 focus:border-signal/50 focus:outline-none"
             />
             <button

@@ -146,6 +146,74 @@ func (s *Store) UpdateActivePrompt(content string) (PromptTemplate, error) {
 	return s.GetActivePrompt()
 }
 
+// SeedPromptByName inserts a named prompt template if it does not already exist.
+// It is stored inactive so it never interferes with the single "active" clip prompt.
+func (s *Store) SeedPromptByName(name, content string) error {
+	if strings.TrimSpace(name) == "" || strings.TrimSpace(content) == "" {
+		return fmt.Errorf("empty named prompt seed")
+	}
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM prompt_templates WHERE name = ?`, name).Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		_, err := s.db.Exec(`INSERT INTO prompt_templates (name, content, is_active) VALUES (?, ?, 0)`, name, content)
+		return err
+	}
+	return nil
+}
+
+func (s *Store) GetPromptByName(name string) (PromptTemplate, error) {
+	var p PromptTemplate
+	var active int
+	err := s.db.QueryRow(`
+		SELECT id, name, content, is_active, updated_at
+		FROM prompt_templates WHERE name = ?`, name).Scan(&p.ID, &p.Name, &p.Content, &active, &p.UpdatedAt)
+	if err != nil {
+		return p, err
+	}
+	p.IsActive = active == 1
+	return p, nil
+}
+
+func (s *Store) UpsertPromptByName(name, content string) (PromptTemplate, error) {
+	_, err := s.db.Exec(`
+		INSERT INTO prompt_templates (name, content, is_active, updated_at)
+		VALUES (?, ?, 0, datetime('now'))
+		ON CONFLICT(name) DO UPDATE SET content = excluded.content, updated_at = datetime('now')`, name, content)
+	if err != nil {
+		return PromptTemplate{}, err
+	}
+	return s.GetPromptByName(name)
+}
+
+// EnsureDictionaryNewsFeeds backfills the active dictionary with default news_feeds
+// when it has none yet (e.g. dictionaries created before the news feeds category existed).
+func (s *Store) EnsureDictionaryNewsFeeds(defaultContent string) error {
+	if strings.TrimSpace(defaultContent) == "" {
+		return nil
+	}
+	active, err := s.GetActiveMentions()
+	if err != nil {
+		return nil
+	}
+	current := ParseMentionDictionary(active.Content)
+	if len(current.NewsFeeds) > 0 {
+		return nil
+	}
+	defaults := ParseMentionDictionary(defaultContent)
+	if len(defaults.NewsFeeds) == 0 {
+		return nil
+	}
+	current.NewsFeeds = defaults.NewsFeeds
+	merged, err := marshalDictionary(current)
+	if err != nil {
+		return err
+	}
+	_, err = s.UpdateActiveMentions(merged)
+	return err
+}
+
 func (s *Store) CreateSource(id, url, podcast string) (Source, error) {
 	_, err := s.db.Exec(`
 		INSERT INTO sources (id, youtube_url, podcast, status)
@@ -154,6 +222,73 @@ func (s *Store) CreateSource(id, url, podcast string) (Source, error) {
 		return Source{}, err
 	}
 	return s.GetSource(id)
+}
+
+func (s *Store) EnsureSource(id, url, podcast string) (Source, error) {
+	src, err := s.GetSource(id)
+	if err == nil {
+		return src, nil
+	}
+	return s.CreateSource(id, url, podcast)
+}
+
+func (s *Store) nextCandidateRank(sourceID string) (int, error) {
+	var maxRank int
+	err := s.db.QueryRow(`SELECT COALESCE(MAX(rank), 0) FROM candidates WHERE source_id = ?`, sourceID).Scan(&maxRank)
+	return maxRank, err
+}
+
+func (s *Store) AppendCandidates(sourceID string, items []AnalysisCandidate) ([]Candidate, error) {
+	if len(items) == 0 {
+		return []Candidate{}, nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	baseRank, err := s.nextCandidateRank(sourceID)
+	if err != nil {
+		return nil, err
+	}
+
+	src, err := s.GetSource(sourceID)
+	if err != nil {
+		return nil, err
+	}
+	mentions, err := s.GetActiveMentions()
+	if err != nil {
+		return nil, err
+	}
+	dict := ParseMentionDictionary(mentions.Content)
+
+	var out []Candidate
+	for i, item := range items {
+		rank := baseRank + i + 1
+		id := fmt.Sprintf("%s-c%02d", sourceID, rank)
+		postText := EnsurePostTextAttribution(item.PostText, src.Podcast, dict)
+		_, err := tx.Exec(`
+			INSERT INTO candidates (
+				id, source_id, rank, start_time, end_time, post_text,
+				why_interesting, confidence, status
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'proposed')`,
+			id, sourceID, rank, item.StartTime, item.EndTime, postText,
+			item.WhyInteresting, item.Confidence)
+		if err != nil {
+			return nil, err
+		}
+		c, err := scanCandidateTx(tx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (s *Store) GetSource(id string) (Source, error) {

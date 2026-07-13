@@ -69,6 +69,17 @@ export async function analyzeSource(sourceId: string): Promise<AnalyzeResult> {
   return data;
 }
 
+export async function analyzeMoment(input: {
+  youtube_url: string;
+  podcast: string;
+  start_time: string;
+  end_time: string;
+  focus_note?: string;
+}): Promise<AnalyzeResult> {
+  const { data } = await apiClient.post<AnalyzeResult>("/factory/analyze-moment", input);
+  return data;
+}
+
 export async function fetchCandidates(sourceId?: string): Promise<Candidate[]> {
   const params = sourceId ? { source_id: sourceId } : undefined;
   const { data } = await apiClient.get<Candidate[]>("/factory/candidates", { params });

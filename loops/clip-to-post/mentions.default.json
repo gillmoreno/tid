@@ -21,5 +21,12 @@
     { "name": "All-In Podcast", "handle": "theallinpod", "aliases": ["All-In", "All In", "theallinpod", "All-In Pod"] },
     { "name": "Dwarkesh Podcast", "handle": "dwarkesh_sp", "aliases": ["Dwarkesh"] },
     { "name": "Lex Fridman Podcast", "handle": "lexfridman", "aliases": ["Lex Fridman"] }
+  ],
+  "news_feeds": [
+    { "name": "The Information", "handle": "theinformation", "aliases": ["Information"], "url": "https://www.theinformation.com" },
+    { "name": "TechCrunch", "handle": "TechCrunch", "url": "https://techcrunch.com" },
+    { "name": "Bloomberg", "handle": "business", "aliases": ["Bloomberg News"], "url": "https://www.bloomberg.com" },
+    { "name": "The Verge", "handle": "verge", "url": "https://www.theverge.com" },
+    { "name": "Stratechery", "handle": "stratechery", "aliases": ["Ben Thompson"], "url": "https://stratechery.com" }
   ]
 }

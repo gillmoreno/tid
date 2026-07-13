@@ -48,6 +48,18 @@ just factory-tick
 |-------|------|
 | `biases.default.md` | Seed for Gil's lens (curiosity + skepticism) |
 | `prompt.default.md` | Seed for “find 2–5 moments” instruction |
+| `humanize-instructions.md` | Distilled rules from the humanize-ai-text skill. Used by rewrite when "Humanize" is chosen in the UI or instruction contains humanize/de-ai. |
+
+**Humanizing post text (removing AI smell)**
+
+The UI "Humanize" button (and any rewrite instruction containing "humanize", "de-ai", etc.) now loads `humanize-instructions.md` and applies a full anti-AI-tell pass:
+- Strips boilerplate, inflated diction, machine rhythm, hedging, em-dashes, etc.
+- Forces varied sentence length and natural texture.
+- Never invents facts to fake humanity.
+
+You can also paste any post_text here and run `/humanize-ai-text` (the full skill) for an even deeper edit, then paste the result back into the factory card.
+
+To strengthen at generation time, the analyzer prompt now explicitly asks for "natural human prose".
 | `transcript.sh` | YouTube → transcript |
 | `analyze.sh` | Transcript + biases + prompt → JSON candidates |
 | `clip.sh` | Timestamp range → `clip.mp4` |

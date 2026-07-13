@@ -80,4 +80,32 @@ CREATE TABLE IF NOT EXISTS ideas (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ideas_status ON ideas(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS article_sources (
+  id TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  publication TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'ingested',
+  error_message TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  analyzed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS article_candidates (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL REFERENCES article_sources(id) ON DELETE CASCADE,
+  rank INTEGER NOT NULL DEFAULT 0,
+  post_text TEXT NOT NULL DEFAULT '',
+  why_interesting TEXT NOT NULL DEFAULT '',
+  confidence REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'proposed',
+  scheduled_at TEXT,
+  prepared_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_article_candidates_source ON article_candidates(source_id);
+CREATE INDEX IF NOT EXISTS idx_article_candidates_sched ON article_candidates(scheduled_at, status);
 `

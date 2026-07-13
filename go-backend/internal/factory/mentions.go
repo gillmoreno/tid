@@ -9,12 +9,14 @@ type MentionEntry struct {
 	Name    string   `json:"name"`
 	Handle  string   `json:"handle"`
 	Aliases []string `json:"aliases,omitempty"`
+	URL     string   `json:"url,omitempty"`
 }
 
 type MentionDictionary struct {
 	People    []MentionEntry `json:"people"`
 	Companies []MentionEntry `json:"companies"`
 	Podcasts  []MentionEntry `json:"podcasts"`
+	NewsFeeds []MentionEntry `json:"news_feeds"`
 }
 
 func ParseMentionDictionary(raw string) MentionDictionary {
@@ -26,9 +28,17 @@ func ParseMentionDictionary(raw string) MentionDictionary {
 	return dict
 }
 
+func marshalDictionary(dict MentionDictionary) (string, error) {
+	raw, err := json.MarshalIndent(dict, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
 func (d MentionDictionary) PromptText() string {
-	if len(d.People) == 0 && len(d.Companies) == 0 && len(d.Podcasts) == 0 {
-		return "(empty — add handles in Post Factory settings)"
+	if len(d.People) == 0 && len(d.Companies) == 0 && len(d.Podcasts) == 0 && len(d.NewsFeeds) == 0 {
+		return "(empty — add handles in the Sources dictionary)"
 	}
 	raw, _ := json.MarshalIndent(d, "", "  ")
 	return string(raw)
@@ -38,12 +48,24 @@ func (d MentionDictionary) ResolvePodcastHandle(podcast string) string {
 	return d.resolveHandle(podcast, d.Podcasts)
 }
 
+func (d MentionDictionary) ResolvePublicationHandle(publication string) string {
+	return d.resolveHandle(publication, d.NewsFeeds)
+}
+
 func (d MentionDictionary) PodcastOptions() []PodcastOption {
-	out := make([]PodcastOption, 0, len(d.Podcasts))
-	for _, p := range d.Podcasts {
+	return toSourceOptions(d.Podcasts)
+}
+
+func (d MentionDictionary) PublicationOptions() []PodcastOption {
+	return toSourceOptions(d.NewsFeeds)
+}
+
+func toSourceOptions(entries []MentionEntry) []PodcastOption {
+	out := make([]PodcastOption, 0, len(entries))
+	for _, e := range entries {
 		out = append(out, PodcastOption{
-			Name:   p.Name,
-			Handle: normalizeHandle(p.Handle),
+			Name:   e.Name,
+			Handle: normalizeHandle(e.Handle),
 		})
 	}
 	return out
@@ -119,6 +141,31 @@ func stripAttributionTail(postText string) string {
 		}
 	}
 	return postText
+}
+
+// ArticleAttributionFooter tags the publication account (or falls back to its name).
+func ArticleAttributionFooter(publication string, dict MentionDictionary) string {
+	if handle := dict.ResolvePublicationHandle(publication); handle != "" {
+		return formatTag(handle)
+	}
+	publication = strings.TrimSpace(publication)
+	if publication == "" {
+		publication = "Source"
+	}
+	return "Source: " + publication
+}
+
+// EnsureArticlePostAttribution appends the publication @ tag to article posts.
+func EnsureArticlePostAttribution(postText, publication string, dict MentionDictionary) string {
+	postText = stripAttributionTail(strings.TrimSpace(postText))
+	footer := ArticleAttributionFooter(publication, dict)
+	if postText == "" {
+		return footer
+	}
+	if strings.Contains(postText, footer) {
+		return postText
+	}
+	return postText + "\n\n" + footer
 }
 
 // EnsurePostTextAttribution appends the podcast @ tag (never a YouTube URL).

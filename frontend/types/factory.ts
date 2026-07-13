@@ -27,6 +27,54 @@ export interface PodcastOption {
   handle: string;
 }
 
+export type PublicationOption = PodcastOption;
+
+export interface MentionEntry {
+  name: string;
+  handle: string;
+  aliases?: string[];
+  url?: string;
+}
+
+export interface Dictionary {
+  people: MentionEntry[];
+  companies: MentionEntry[];
+  podcasts: MentionEntry[];
+  news_feeds: MentionEntry[];
+}
+
+export type DictionaryCategory = keyof Dictionary;
+
+export interface ArticleSource {
+  id: string;
+  url: string;
+  publication: string;
+  title: string;
+  status: string;
+  error_message?: string;
+  created_at: string;
+  analyzed_at?: string;
+}
+
+export interface ArticleCandidate {
+  id: string;
+  source_id: string;
+  rank: number;
+  post_text: string;
+  why_interesting: string;
+  confidence: number;
+  status: string;
+  scheduled_at?: string;
+  prepared_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ArticleAnalyzeResult {
+  source_id: string;
+  candidates: ArticleCandidate[];
+}
+
 export interface Source {
   id: string;
   youtube_url: string;

@@ -24,12 +24,14 @@ Bonus points for clips that are **wild, bold, and attention-catching** — as lo
 - Pick a clip between **30 seconds and 5 minutes**
 - `start_time` and `end_time` must bracket the timestamped lines your post is based on
 - Choose segments that stand alone without needing the full episode
-- Pick **Format A** (build the case) or **Format B** (quote excerpt) — whichever fits the clip
+- Pick **Format A** (build the case), **Format B** (quote excerpt), or **Format C** (Gil's commentary take) — whichever fits the clip
+- Prefer **Format C** when the moment invites Gil's opinion — skeptical pushback, agreement with a twist, or "here's what this actually means"
 - Write **post_text** ready to paste on X:
   - Tag people/companies mentioned using @ handles from the MENTIONS dictionary
   - Format A: staccato beats, reframe → proof → pattern → closer/question
   - Format B: topic header optional, then tight quote in speaker's voice
   - End with podcast @ handle only (e.g. @theallinpod) — **never** a YouTube URL
+  - Natural human prose only: vary sentence length, avoid uniform rhythm, inflated diction, boilerplate, or AI tells. Sound like a careful person wrote it.
 - Explain **why_interesting** in one sentence (for Gil's review UI)
 - Set **confidence** 0.0–1.0 (how strong this clip is for posting)
 

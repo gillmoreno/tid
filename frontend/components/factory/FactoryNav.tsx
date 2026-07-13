@@ -3,7 +3,9 @@ import { cn } from "@/lib/utils";
 
 const tabs = [
   { to: "/factory", label: "Podcast clips", end: true },
+  { to: "/factory/articles", label: "Articles", end: false },
   { to: "/factory/ideas", label: "Ideas", end: false },
+  { to: "/factory/sources", label: "Sources", end: false },
 ] as const;
 
 export function FactoryNav() {

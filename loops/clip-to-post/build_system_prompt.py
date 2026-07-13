@@ -46,10 +46,13 @@ Rules:
 - Transcript lines are prefixed with [HH:MM:SS] — start_time and end_time MUST bracket the lines your post_text is based on
 - post_text must only describe what is actually said between start_time and end_time (no mixing topics from other timestamps)
 - Segment markers like [--- segment N/8 ---] show episode coverage — use later segments, not just the opening
-- Choose Format A (essay) or Format B (quote) per clip
+- Choose Format A (essay), Format B (quote), or Format C (Gil's commentary) per clip — mix formats across candidates when it helps
+- Format C: Gil's skeptical-curious opinion first, anchored in what the speaker actually said — not a full quote dump
+- Formats A/B: post_text must stay faithful to what is said in the clip range
 - Tag people/companies from MENTIONS dictionary when referenced
 - End post_text with podcast @ handle — not a YouTube link
-- No emojis, no hashtags"""
+- No emojis, no hashtags
+- Write post_text in natural human prose: vary sentence length, avoid stacked short declarations, inflated words, mechanical rhythm, or "AI voice". Sound like a sharp, slightly uneven person making a point — not a model. Use the voice rules in the biases and taste docs."""
     print(text)
 
 

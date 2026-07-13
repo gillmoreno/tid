@@ -62,6 +62,16 @@ Use when the speaker already tells the story in the clip:
 4. Tag mentioned people and companies inline with @ handles
 5. End with speaker @ and podcast @ (e.g. @DavidSacks @theallinpod)
 
+### Format C — Gil's take (commentary)
+Use when Gil has an opinion — not just relaying the clip:
+1. Open with **Gil's reframe or claim** — what he thinks this means, agrees with, or pushes back on
+2. Anchor in **one concrete thing** the speaker actually said (paraphrase or short quote — not the whole segment)
+3. Mechanism or implication — who wins, who's wrong, what would have to be true
+4. Optional sharp question at the end
+5. Tag people/companies from the clip; end with podcast @ only
+
+Gil's voice is first-person opinion layered on evidence from the clip — not a neutral summary or full transcript quote.
+
 ## Examples that worked
 
 **Anthropic / Karp (Format A):** Reframe meltdown → warning. Figma board → Claude Design. Pattern across verticals. Microsoft analogy. "What do you think?"

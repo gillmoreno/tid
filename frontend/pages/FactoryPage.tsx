@@ -11,6 +11,7 @@ import { FactoryNav } from "@/components/factory/FactoryNav";
 import { CandidateCard } from "@/components/factory/CandidateCard";
 import { CandidatesTable } from "@/components/factory/CandidatesTable";
 import { IngestForm } from "@/components/factory/IngestForm";
+import { SpotMomentForm } from "@/components/factory/SpotMomentForm";
 import { ScheduledQueue } from "@/components/factory/ScheduledQueue";
 import { SettingsPanel } from "@/components/factory/SettingsPanel";
 import { SourceList } from "@/components/factory/SourceList";
@@ -179,6 +180,24 @@ export function FactoryPage() {
 
       <div className="space-y-6">
         <SettingsPanel defaultOpen />
+
+        <SpotMomentForm
+          onAnalyzed={(result) => {
+            setSelectedSourceId(result.source_id);
+            setCandidates((prev) => {
+              const ids = new Set(prev.map((c) => c.id));
+              const merged = [...prev];
+              for (const c of result.candidates) {
+                if (!ids.has(c.id)) merged.push(c);
+              }
+              return merged.sort((a, b) => a.rank - b.rank);
+            });
+            if (result.candidates[0]) {
+              setSelectedCandidateId(result.candidates[0].id);
+            }
+            refreshAll();
+          }}
+        />
 
         <div className="grid gap-6 xl:grid-cols-2">
           <IngestForm onCreated={handleSourceCreated} />

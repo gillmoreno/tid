@@ -2,8 +2,14 @@
 
 **Repo:** The Idea Guy (`tid`) — Go API + React + SQLite + composable loops.
 
-**Local app:** `just dev` → http://localhost:5180  
-**Post Factory UI (local only):** http://localhost:5180/factory (`VITE_FACTORY_ENABLED=true`)
+**Local app:** `just dev` → http://localhost:5180
+**Factory UIs (local only, `VITE_FACTORY_ENABLED=true`):**
+- Podcast clips: http://localhost:5180/factory
+- Articles (article URL → X posts): http://localhost:5180/factory/articles
+- Ideas backlog: http://localhost:5180/factory/ideas
+- Sources dictionary (podcasts / news feeds / companies / people): http://localhost:5180/factory/sources
+
+Article Factory loop: `loops/article-to-post/` (needs `pip3 install -r loops/article-to-post/requirements.txt` for trafilatura).
 
 ## Primary loop: Post Factory
 

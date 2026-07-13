@@ -22,9 +22,11 @@ func (a *App) mountFactoryRoutes(r chi.Router) {
 	r.Get("/factory/mentions", a.handleGetMentions)
 	r.Put("/factory/mentions", a.handlePutMentions)
 	r.Get("/factory/podcasts", a.handleListPodcasts)
+	r.Get("/factory/publications", a.handleListPublications)
 
 	r.Get("/factory/sources", a.handleListSources)
 	r.Post("/factory/sources", a.handleCreateSource)
+	r.Post("/factory/analyze-moment", a.handleAnalyzeMoment)
 	r.Get("/factory/sources/{id}", a.handleGetSource)
 	r.Delete("/factory/sources/{id}", a.handleDeleteSource)
 	r.Post("/factory/sources/{id}/analyze", a.handleAnalyzeSource)
@@ -44,6 +46,7 @@ func (a *App) mountFactoryRoutes(r chi.Router) {
 	r.Post("/factory/scheduler/tick", a.handleSchedulerTick)
 
 	a.mountIdeaRoutes(r)
+	a.mountArticleRoutes(r)
 }
 
 func (a *App) handleGetBiases(w http.ResponseWriter, _ *http.Request) {
@@ -143,6 +146,20 @@ func (a *App) handleListPodcasts(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, opts)
 }
 
+func (a *App) handleListPublications(w http.ResponseWriter, _ *http.Request) {
+	m, err := a.factory.GetActiveMentions()
+	if err != nil {
+		writeError(w, http.StatusNotFound, "mentions not found")
+		return
+	}
+	dict := factory.ParseMentionDictionary(m.Content)
+	opts := dict.PublicationOptions()
+	if opts == nil {
+		opts = []factory.PodcastOption{}
+	}
+	writeJSON(w, opts)
+}
+
 func (a *App) handleListSources(w http.ResponseWriter, _ *http.Request) {
 	items, err := a.factory.ListSources()
 	if err != nil {
@@ -212,6 +229,95 @@ func (a *App) handleDeleteSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]string{"deleted": id})
+}
+
+func (a *App) handleAnalyzeMoment(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		YouTubeURL string `json:"youtube_url"`
+		Podcast    string `json:"podcast"`
+		StartTime  string `json:"start_time"`
+		EndTime    string `json:"end_time"`
+		FocusNote  string `json:"focus_note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if strings.TrimSpace(body.YouTubeURL) == "" {
+		writeError(w, http.StatusBadRequest, "youtube_url required")
+		return
+	}
+	if strings.TrimSpace(body.Podcast) == "" {
+		writeError(w, http.StatusBadRequest, "podcast required")
+		return
+	}
+	if strings.TrimSpace(body.StartTime) == "" {
+		writeError(w, http.StatusBadRequest, "start_time required (HH:MM:SS or MM:SS)")
+		return
+	}
+	if strings.TrimSpace(body.EndTime) == "" {
+		writeError(w, http.StatusBadRequest, "end_time required (HH:MM:SS or MM:SS)")
+		return
+	}
+
+	result, err := a.runAnalyzeMoment(body.YouTubeURL, body.Podcast, body.StartTime, body.EndTime, body.FocusNote)
+	if err != nil {
+		if strings.Contains(err.Error(), "invalid timestamp") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, result)
+}
+
+func (a *App) runAnalyzeMoment(youtubeURL, podcast, startTime, endTime, focusNote string) (map[string]any, error) {
+	podcast = strings.TrimSpace(podcast)
+	dict, err := a.activeMentionDict()
+	if err != nil {
+		return nil, err
+	}
+	if dict.ResolvePodcastHandle(podcast) == "" {
+		return nil, fmt.Errorf("podcast must match a name in the mentions dictionary")
+	}
+
+	sourceID := factory.NewSourceID(youtubeURL, podcast)
+	src, err := a.factory.EnsureSource(sourceID, youtubeURL, podcast)
+	if err != nil {
+		return nil, err
+	}
+	_ = a.factory.SetSourceStatus(sourceID, "analyzing", "")
+
+	if err := a.runner.FetchTranscript(sourceID, src.YouTubeURL); err != nil {
+		_ = a.factory.SetSourceStatus(sourceID, "failed", err.Error())
+		return nil, err
+	}
+
+	bias, err := a.factory.GetActiveBias()
+	if err != nil {
+		_ = a.factory.SetSourceStatus(sourceID, "failed", err.Error())
+		return nil, err
+	}
+	mentions, err := a.factory.GetActiveMentions()
+	if err != nil {
+		_ = a.factory.SetSourceStatus(sourceID, "failed", err.Error())
+		return nil, err
+	}
+
+	analysis, err := a.runner.AnalyzeMoment(sourceID, startTime, endTime, focusNote, bias.Content, mentions.Content)
+	if err != nil {
+		_ = a.factory.SetSourceStatus(sourceID, "failed", err.Error())
+		return nil, err
+	}
+
+	candidates, err := a.factory.AppendCandidates(sourceID, analysis.Candidates)
+	if err != nil {
+		_ = a.factory.SetSourceStatus(sourceID, "failed", err.Error())
+		return nil, err
+	}
+	_ = a.factory.MarkSourceAnalyzed(sourceID)
+	return map[string]any{"source_id": sourceID, "candidates": candidates}, nil
 }
 
 func (a *App) handleAnalyzeSource(w http.ResponseWriter, r *http.Request) {
@@ -699,6 +805,14 @@ func seedFactoryStore(store *factory.Store, repoRoot string) error {
 	}
 	if mentions != "" {
 		if err := store.SeedMentions(mentions); err != nil {
+			return err
+		}
+		if err := store.EnsureDictionaryNewsFeeds(mentions); err != nil {
+			return err
+		}
+	}
+	if articlePrompt := loadSeedFile(repoRoot, "loops/article-to-post/prompt.default.md"); articlePrompt != "" {
+		if err := store.SeedPromptByName(factory.ArticlePromptName, articlePrompt); err != nil {
 			return err
 		}
 	}

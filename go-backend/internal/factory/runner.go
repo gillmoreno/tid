@@ -11,18 +11,24 @@ import (
 )
 
 type Runner struct {
-	RepoRoot string
-	LoopsDir string
+	RepoRoot        string
+	LoopsDir        string
+	ArticleLoopsDir string
 }
 
 func NewRunner(repoRoot string) Runner {
 	loops := filepath.Join(repoRoot, "loops", "clip-to-post")
-	return Runner{RepoRoot: repoRoot, LoopsDir: loops}
+	articleLoops := filepath.Join(repoRoot, "loops", "article-to-post")
+	return Runner{RepoRoot: repoRoot, LoopsDir: loops, ArticleLoopsDir: articleLoops}
 }
 
 func (r Runner) Run(ctxDir string, name string, args ...string) (string, error) {
-	cmd := exec.Command(filepath.Join(r.LoopsDir, name), args...)
-	cmd.Dir = r.LoopsDir
+	return runIn(r.LoopsDir, name, args...)
+}
+
+func runIn(loopDir, name string, args ...string) (string, error) {
+	cmd := exec.Command(filepath.Join(loopDir, name), args...)
+	cmd.Dir = loopDir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -85,6 +91,63 @@ func (r Runner) Analyze(sourceID string, bias, prompt, mentions string) (Analysi
 	return AnalysisResult{}, fmt.Errorf("could not parse analysis output")
 }
 
+func (r Runner) AnalyzeMoment(sourceID, windowStart, windowEnd, focusNote, bias, mentions string) (AnalysisResult, error) {
+	windowStart, windowEnd, err := ValidateTimeRange(windowStart, windowEnd)
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+
+	segment, err := ExtractTimestampedTranscriptSegment(r.LoopsDir, sourceID, windowStart, windowEnd)
+	if err != nil {
+		return AnalysisResult{}, err
+	}
+	if strings.TrimSpace(segment) == "" {
+		return AnalysisResult{}, fmt.Errorf("no transcript found between %s and %s", windowStart, windowEnd)
+	}
+
+	workDir := filepath.Join(r.LoopsDir, "drafts", sourceID)
+	inputPath := filepath.Join(workDir, "moment-input.json")
+	payload := map[string]string{
+		"biases":       bias,
+		"mentions":     mentions,
+		"transcript":   segment,
+		"focus_note":   focusNote,
+		"window_start": windowStart,
+		"window_end":   windowEnd,
+	}
+	raw, _ := json.Marshal(payload)
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		return AnalysisResult{}, err
+	}
+	if err := os.WriteFile(inputPath, raw, 0o644); err != nil {
+		return AnalysisResult{}, err
+	}
+
+	outPath := filepath.Join("drafts", sourceID, "moment-analysis.json")
+	if _, err := r.Run(r.LoopsDir, "analyze_moment.sh", "--input", inputPath, "--out", outPath); err != nil {
+		return AnalysisResult{}, err
+	}
+
+	resultPath := filepath.Join(r.LoopsDir, "drafts", sourceID, "moment-analysis.json")
+	data, err := os.ReadFile(resultPath)
+	if err != nil {
+		return AnalysisResult{}, fmt.Errorf("read moment analysis: %w", err)
+	}
+	var result AnalysisResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		return AnalysisResult{}, fmt.Errorf("parse moment analysis: %w", err)
+	}
+	if len(result.Candidates) == 0 {
+		return AnalysisResult{}, fmt.Errorf("moment analysis returned no candidates")
+	}
+	// Same video clip for every take — only post_text length/angle differs.
+	for i := range result.Candidates {
+		result.Candidates[i].StartTime = windowStart
+		result.Candidates[i].EndTime = windowEnd
+	}
+	return result, nil
+}
+
 func speakerPodcast(source Source) (speaker, podcast string) {
 	podcast = source.Podcast
 	if podcast == "" {
@@ -103,16 +166,16 @@ func (r Runner) WriteCandidateDraft(source Source, c Candidate, clipPath string,
 	postText := EnsurePostTextAttribution(c.PostText, podcast, dict)
 
 	meta := map[string]any{
-		"id":          c.ID,
-		"source_url":  source.YouTubeURL,
-		"speaker":     speaker,
-		"podcast":     podcast,
-		"start":       c.StartTime,
-		"end":         c.EndTime,
-		"status":      "approved",
-		"post_text":   postText,
-		"clip_path":   clipPath,
-		"created_at":  c.CreatedAt,
+		"id":         c.ID,
+		"source_url": source.YouTubeURL,
+		"speaker":    speaker,
+		"podcast":    podcast,
+		"start":      c.StartTime,
+		"end":        c.EndTime,
+		"status":     "approved",
+		"post_text":  postText,
+		"clip_path":  clipPath,
+		"created_at": c.CreatedAt,
 	}
 	metaBytes, _ := json.MarshalIndent(meta, "", "  ")
 	if err := os.WriteFile(filepath.Join(draftDir, "meta.json"), metaBytes, 0o644); err != nil {
