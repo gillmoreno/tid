@@ -1,0 +1,38 @@
+# Roomworks pilot image: Vite frontend + Go signaling API behind nginx.
+FROM node:24-alpine AS frontend-build
+WORKDIR /src/meta-app
+
+COPY meta-app/package.json meta-app/package-lock.json ./
+RUN npm ci
+COPY meta-app/ ./
+
+ARG VITE_SIGNALING_URL=/api
+ENV VITE_SIGNALING_URL=${VITE_SIGNALING_URL}
+RUN npm run build
+
+FROM --platform=$BUILDPLATFORM golang:1.25.12-alpine AS signaling-build
+WORKDIR /src/signaling
+
+ARG TARGETOS=linux
+ARG TARGETARCH
+COPY signaling/go.mod signaling/go.sum ./
+RUN go mod download
+COPY signaling/ ./
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH:-amd64} \
+    go build -trimpath -ldflags="-s -w" -o /out/roomworks-signaling .
+
+FROM nginx:1.30.3-alpine
+RUN apk add --no-cache --upgrade ca-certificates supervisor tzdata \
+    && rm -f /etc/nginx/conf.d/default.conf
+
+COPY --from=frontend-build /src/meta-app/dist/ /usr/share/nginx/html/
+COPY --from=signaling-build /out/roomworks-signaling /usr/local/bin/roomworks-signaling
+COPY deploy/roomworks/nginx.conf /etc/nginx/conf.d/default.conf
+COPY deploy/roomworks/supervisord.conf /etc/supervisord.conf
+
+RUN mkdir -p /data /run/nginx
+
+EXPOSE 80
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget -q -O - http://127.0.0.1/api/healthz >/dev/null || exit 1
+CMD ["supervisord", "-c", "/etc/supervisord.conf"]

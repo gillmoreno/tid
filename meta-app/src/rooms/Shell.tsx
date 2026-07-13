@@ -14,7 +14,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <main>{children}</main>
       <footer className="footer">
         <span>Room shell</span>
-        <span>localhost:5200</span>
+        <span>{window.location.host}</span>
       </footer>
     </div>
   )

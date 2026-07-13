@@ -1,5 +1,9 @@
 export const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL || 'http://localhost:8081'
 
+export function resolveSignalingEndpoint(signalingUrl: string, origin: string): URL {
+  return new URL(signalingUrl, origin)
+}
+
 export class RoomApiError extends Error {
   readonly status: number
   readonly code: string
@@ -16,6 +20,7 @@ type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT'
   credential?: string
   ownerCapability?: string
+  creatorPermit?: string
   body?: unknown
 }
 
@@ -29,6 +34,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...(options.credential ? { Authorization: `Bearer ${options.credential}` } : {}),
         ...(options.ownerCapability ? { 'X-Owner-Capability': options.ownerCapability } : {}),
+        ...(options.creatorPermit ? { 'X-Room-Creator-Permit': options.creatorPermit } : {}),
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     })
@@ -137,8 +143,12 @@ export type SignalResponse = {
 }
 
 export const roomApi = {
-  createRoom(maxMembers: number): Promise<CreateRoomResponse> {
-    return request('/v2/rooms', { method: 'POST', body: { maxMembers } })
+  createRoom(maxMembers: number, creatorPermit: string): Promise<CreateRoomResponse> {
+    return request('/v2/rooms', {
+      method: 'POST',
+      creatorPermit,
+      body: { maxMembers },
+    })
   },
 
   createInvite(

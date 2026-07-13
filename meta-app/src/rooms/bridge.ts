@@ -103,99 +103,10 @@ export function disconnectBridgeSource(source: MessageEventSource): void {
   subscriptions.delete(source as object)
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
-}
-
-export function createCounterBundle(title: string, nonce = randomToken(18)): { html: string; nonce: string } {
-  const safeTitle = escapeHtml(title)
-  const csp = [
-    "default-src 'none'",
-    `script-src 'nonce-${nonce}'`,
-    `style-src 'nonce-${nonce}'`,
-    "connect-src 'none'",
-    "img-src 'none'",
-    "font-src 'none'",
-    "object-src 'none'",
-    "base-uri 'none'",
-    "form-action 'none'",
-  ].join('; ')
+export function createCounterBundle(title: string, nonce = randomToken(18)): { src: string; nonce: string } {
+  const fragment = new URLSearchParams({ nonce, title }).toString()
   return {
     nonce,
-    html: `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="${csp}">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${safeTitle}</title>
-  <style nonce="${nonce}">
-    :root { color-scheme: dark; font-family: Georgia, serif; background: #141713; color: #f0ecdf; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-    main { width: min(420px, 100%); padding: 42px; border: 1px solid #4c5248; background: #1b1f1a; box-shadow: 12px 12px 0 #090b09; }
-    .eyebrow { color: #a4c48c; font: 700 11px/1 monospace; letter-spacing: .18em; text-transform: uppercase; }
-    h1 { margin: 12px 0 30px; font-size: clamp(24px, 8vw, 42px); font-weight: 400; line-height: 1; }
-    output { display: block; color: #f2b65d; font: 700 86px/1 monospace; letter-spacing: -.09em; margin-bottom: 24px; }
-    button { width: 100%; border: 0; padding: 15px 20px; background: #e7e1d2; color: #161915; font: 700 14px/1 monospace; cursor: pointer; }
-    button:active { transform: translate(2px, 2px); }
-    .status { min-height: 18px; margin-top: 14px; color: #858c80; font: 11px/1.4 monospace; }
-  </style>
-</head>
-<body>
-  <main>
-    <div class="eyebrow">Shared instrument</div>
-    <h1>${safeTitle}</h1>
-    <output id="count">—</output>
-    <button id="increment" type="button">Add one</button>
-    <div id="status" class="status">Connecting to the room bridge…</div>
-  </main>
-  <script nonce="${nonce}">
-    (() => {
-      const NONCE = ${JSON.stringify(nonce)};
-      const pending = new Map();
-      let sequence = 0;
-      const count = document.getElementById('count');
-      const status = document.getElementById('status');
-      function call(method, payload) {
-        const requestId = 'request-' + (++sequence);
-        parent.postMessage({ channel: 'meta-room', version: 1, nonce: NONCE, type: 'bridge.request', requestId, method, payload }, '*');
-        return new Promise((resolve, reject) => {
-          pending.set(requestId, { resolve, reject });
-          setTimeout(() => { if (pending.delete(requestId)) reject(new Error('Bridge timeout')); }, 5000);
-        });
-      }
-      function render(state) {
-        if (!state || !Number.isSafeInteger(state.value) || state.value < 0) return;
-        count.textContent = String(state.value);
-        status.textContent = 'Saved locally · ready to sync';
-      }
-      window.addEventListener('message', (event) => {
-        if (event.source !== parent) return;
-        const message = event.data;
-        if (!message || message.channel !== 'meta-room' || message.version !== 1 || message.nonce !== NONCE) return;
-        if (message.type === 'bridge.state') render(message.state);
-        if (message.type === 'bridge.response' && pending.has(message.requestId)) {
-          const request = pending.get(message.requestId);
-          pending.delete(message.requestId);
-          if (message.ok) { render(message.state); request.resolve(message.state); }
-          else request.reject(new Error(message.error || 'Bridge update failed'));
-        }
-      });
-      document.getElementById('increment').addEventListener('click', async () => {
-        status.textContent = 'Saving…';
-        try { await call('update', { type: 'counter.increment' }); }
-        catch { status.textContent = 'Update failed · try again'; }
-      });
-      call('subscribe').catch(() => { status.textContent = 'Room bridge unavailable'; });
-    })();
-  </script>
-</body>
-</html>`,
+    src: `/room-frame.html?v=3#${fragment}`,
   }
 }

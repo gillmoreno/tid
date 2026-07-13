@@ -20,6 +20,8 @@ describe('room create and offline-owner redemption', () => {
       const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
 
       if (method === 'POST' && path === '/v2/rooms') {
+        const headers = init?.headers as Record<string, string> | undefined
+        expect(headers?.['X-Room-Creator-Permit']).toBe('room-creator-permit')
         return json({
           roomId: 'room_12345678',
           maxMembers: 2,
@@ -81,7 +83,7 @@ describe('room create and offline-owner redemption', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const created = await createRoom('Offline shared counter', 2)
+    const created = await createRoom('Offline shared counter', 2, 'room-creator-permit')
     const invitation = parseInvitationPackage(created.invitationKey, 'invite_12345678')
     expect(invitation).toMatchObject({
       inviteId: 'invite_12345678',

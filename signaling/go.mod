@@ -1,6 +1,6 @@
 module signaling
 
-go 1.25.6
+go 1.25.12
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

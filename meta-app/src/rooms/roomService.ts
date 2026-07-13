@@ -90,8 +90,12 @@ async function encryptCheckpoint(room: VaultRoom): Promise<string> {
   ))
 }
 
-export async function createRoom(title: string, capacity: number): Promise<CreatedRoom> {
-  const response = await roomApi.createRoom(capacity)
+export async function createRoom(
+  title: string,
+  capacity: number,
+  creatorPermit: string,
+): Promise<CreatedRoom> {
+  const response = await roomApi.createRoom(capacity, creatorPermit)
   const roomDataKey = await generateRoomDataKey()
   const bundle: CodeBundle = { version: 1, kind: 'counter', title }
   const encryptedBundle = await encryptJson(roomDataKey, bundle, `room:${response.roomId}:bundle`)
@@ -412,7 +416,7 @@ export class RoomSync {
   }
 }
 
-export function renderCounterBundle(bundle: CodeBundle): { html: string; nonce: string } {
+export function renderCounterBundle(bundle: CodeBundle): { src: string; nonce: string } {
   if (bundle.version !== 1 || bundle.kind !== 'counter') throw new Error('Unsupported room bundle')
   return createCounterBundle(bundle.title)
 }

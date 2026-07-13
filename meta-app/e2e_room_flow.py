@@ -20,6 +20,7 @@ from playwright.sync_api import BrowserContext, Page, sync_playwright
 
 APP_URL = os.environ.get("META_APP_URL", "http://localhost:5200")
 SIGNALING_URL = os.environ.get("SIGNALING_URL", "http://localhost:8081")
+CREATOR_PERMIT = os.environ.get("ROOMWORKS_CREATOR_PERMIT", "")
 CHROME_PATH = os.environ.get(
     "PLAYWRIGHT_CHROME_PATH",
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -109,8 +110,10 @@ def wait_for_count(page: Page, expected: int, timeout_ms: int = 20_000) -> None:
         if frame.locator("#count").inner_text() == str(expected):
             return
         page.wait_for_timeout(250)
+    status = frame.locator("#status").inner_text()
     raise AssertionError(
-        f"expected counter {expected}, saw {frame.locator('#count').inner_text()}"
+        f"expected counter {expected}, saw {frame.locator('#count').inner_text()}; "
+        f"bridge status: {status}"
     )
 
 
@@ -133,6 +136,7 @@ def new_context(browser: Any) -> BrowserContext:
 
 
 def run() -> None:
+    assert CREATOR_PERMIT, "ROOMWORKS_CREATOR_PERMIT is required"
     status, health = api_request("GET", "/healthz")
     assert status == 200 and health == {"status": "ok"}
 
@@ -149,8 +153,12 @@ def run() -> None:
         owner_page = owner.new_page()
         owner_page.goto(APP_URL, wait_until="networkidle")
         owner_page.get_by_role("button", name="Create a room").click()
+        owner_page.get_by_label("Room creator token").fill(CREATOR_PERMIT)
+        owner_page.get_by_role("button", name="Unlock creation").click()
         owner_page.get_by_label("Room purpose").fill("E2E shared counter")
-        owner_page.get_by_label("Unique member capacity").fill("2")
+        capacity_input = owner_page.get_by_label("Unique member capacity")
+        assert capacity_input.input_value() == "2"
+        assert capacity_input.get_attribute("readonly") is not None
         owner_page.get_by_role(
             "button", name="Create room & invitation"
         ).click()
@@ -164,6 +172,8 @@ def run() -> None:
         owner_room_url = f"{APP_URL}/rooms/{room_id}"
         owner_data = vault_room(owner_page, room_id)
         assert owner_data and owner_data["ownerCapability"]
+        owner_page.goto(owner_room_url, wait_until="networkidle")
+        wait_for_count(owner_page, 0)
 
         # A syntactically valid package with the wrong secret must not create a room.
         wrong_data = dict(package_data)

@@ -1,5 +1,15 @@
 # Handoff: Deploy the Local-First Room Demo for a Public Pilot
 
+> **Topology update (2026-07-12):** The operator chose the same Docker deployment pattern used by
+> Roger instead of Cloudflare Pages. The current implementation and runbook are in
+> `2026-07-12-public-room-pilot-deployment.md`. Both public hostnames route through the named
+> tunnel to one localhost-published Roomworks container.
+
+> **Creator gate update (2026-07-13):** The deployed gate no longer uses the reusable pilot token
+> described in this historical handoff. Room creation now requires a one-use, capacity-bound,
+> expiring Ed25519 permit in `X-Room-Creator-Permit`. The private signer stays on the Mac; the Go
+> container receives only its public verification key. Follow the current deployment runbook.
+
 **Date:** 2026-07-12
 **Repository:** `tid`
 **Branch to start from:** `main`
@@ -107,24 +117,18 @@ flowchart LR
 
 ## Pre-Exposure Blocker: Room-Creation Abuse
 
-`POST /v2/rooms` is currently public and unauthenticated. Payload quotas protect
-individual records, but an attacker could create unlimited rooms and grow the
-SQLite database.
+The original `POST /v2/rooms` endpoint was public and unauthenticated. The deployed resolution is
+an offline-signed creator-permit gate:
 
-Before exposing the API, implement a pilot creator gate:
-
-- Add an environment-backed pilot creation token to the Go service.
-- Require it only for `POST /v2/rooms`, for example through
-  `X-Pilot-Create-Token`.
-- Store only a constant-time-comparable hash or derive the comparison safely.
-- Never commit the token.
-- Add a small creator-unlock step to the frontend. The pilot creator pastes the
-  token locally before creating rooms.
-- Do not place the token in Vite build variables, JavaScript bundles, URLs, or
-  checked-in configuration.
+- Require a one-use Ed25519 permit in `X-Room-Creator-Permit` only for `POST /v2/rooms`.
+- Bind each permit to exact capacity and expiry, and consume it in the room transaction.
+- Keep the private signer outside Docker; configure Go with only its public verification key.
+- Never commit the private seed or a minted permit.
+- Let the creator paste the permit locally before creating a room.
+- Do not place permits in Vite variables, JavaScript bundles, URLs, or checked-in configuration.
 - Invitation redemption and admitted-member endpoints remain publicly
   reachable and capability-protected.
-- Add Go and frontend tests for missing, invalid, and valid creator tokens.
+- Add Go and frontend tests for missing, invalid, expired, mismatched, used, and valid permits.
 
 Also apply Cloudflare rate limits to public API paths. At minimum, limit room
 creation, invite redemption attempts, and unusually high signaling/mailbox
@@ -140,7 +144,7 @@ The Go process should run with settings equivalent to:
 SIGNALING_ADDR=127.0.0.1:8081
 SIGNALING_DB_PATH="/absolute/path/outside/repo/roomworks-signaling.db"
 SIGNALING_ALLOWED_ORIGINS="https://rooms.the-idea-guy.com,http://localhost:5200"
-ROOMWORKS_PILOT_CREATE_TOKEN="<secret supplied outside git>"
+ROOMWORKS_CREATOR_VERIFY_KEY="<base64url Ed25519 public key>"
 ```
 
 Requirements:
@@ -214,7 +218,7 @@ Guardrails:
 
 - Never commit the tunnel ID if the chosen policy treats it as private.
 - Never commit the tunnel credentials JSON, Cloudflare API token, account ID,
-  pilot creator token, or generated `.env`.
+  creator signing seed, minted permit, or generated `.env`.
 - Do not print credentials into chat or terminal summaries.
 - Run `cloudflared` under a supervised macOS service so it restarts after
   failure.
@@ -322,9 +326,9 @@ Follow the repository rule that feature and deployment documentation belongs in
 - Do not expose local port 8081 directly to the internet.
 - Do not expose the main TID factory/admin UI.
 - Do not modify the existing apex `the-idea-guy.com` deployment unintentionally.
-- Do not commit `.env`, SQLite files, tunnel credentials, API tokens, pilot
-  tokens, backups, logs, `dist/`, or `node_modules/`.
-- Do not embed the pilot creator token in the frontend bundle.
+- Do not commit `.env`, SQLite files, tunnel credentials, API tokens, creator
+  signing seeds, minted permits, backups, logs, `dist/`, or `node_modules/`.
+- Do not embed a creator permit or private signing key in the frontend bundle.
 - Do not remove E2EE because the tunnel uses HTTPS.
 - Do not claim the signaling server can prevent an admitted peer from copying
   room data.
@@ -340,7 +344,7 @@ Follow the repository rule that feature and deployment documentation belongs in
 - The API listens only on localhost.
 - The frontend uses the production API URL.
 - Production CORS allows the intended frontend and rejects unrelated origins.
-- Room creation requires the private pilot creator token.
+- Room creation requires a valid one-use, capacity-bound creator permit.
 - Cloudflare rate controls are active.
 - SQLite persists outside the repository and has a tested backup/restore path.
 - Go, frontend, lint, build, and local E2E tests pass.
@@ -359,7 +363,6 @@ possible:
   Cloudflare account.
 - Cloudflare login/authorization when CLI tools prompt.
 - API token/account permissions if automation cannot use interactive login.
-- The pilot creator token, entered locally and never printed.
 - Approval before creating production test rooms or changing DNS.
 
 ## Rollback

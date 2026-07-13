@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mint Roomworks Creator Token"
+  short_description: "Mint one-use Roomworks creator tokens"
+  default_prompt: "Use $roomworks-mint-creator-token to mint a one-use creator token for a 10-person room."

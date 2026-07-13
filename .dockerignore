@@ -4,7 +4,14 @@
 node_modules
 frontend/dist
 frontend/node_modules
+meta-app/node_modules
+meta-app/dist
+meta-app/tsconfig.tsbuildinfo
+signaling/signaling.db
+**/.env
+**/.env.local
 data
 .DS_Store
 .idea
 .vscode
+.agents

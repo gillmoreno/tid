@@ -41,9 +41,9 @@ export function RoomFrame({ room, bundle }: RoomFrameProps) {
       ref={frameRef}
       className="room-frame"
       title={`${room.title} application`}
-      sandbox="allow-scripts allow-forms"
+      sandbox="allow-scripts"
       referrerPolicy="no-referrer"
-      srcDoc={rendered.html}
+      src={rendered.src}
     />
   )
 }

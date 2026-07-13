@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { handleBridgeMessage, type RoomBridge } from './bridge'
+import { createCounterBundle, handleBridgeMessage, type RoomBridge } from './bridge'
 
 function eventWithSource(data: unknown, source: MessageEventSource): MessageEvent<unknown> {
   const event = new MessageEvent('message', { data })
@@ -8,6 +8,19 @@ function eventWithSource(data: unknown, source: MessageEventSource): MessageEven
 }
 
 describe('sandbox room bridge', () => {
+  it('passes untrusted room metadata to the static frame only through an encoded fragment', () => {
+    const nonce = 'a'.repeat(24)
+    const rendered = createCounterBundle('<img src=x onerror=alert(1)>', nonce)
+    const url = new URL(rendered.src, 'https://rooms.example')
+    const parameters = new URLSearchParams(url.hash.slice(1))
+
+    expect(url.pathname).toBe('/room-frame.html')
+    expect(url.search).toBe('?v=3')
+    expect(parameters.get('nonce')).toBe(nonce)
+    expect(parameters.get('title')).toBe('<img src=x onerror=alert(1)>')
+    expect(rendered.src).not.toContain('<img')
+  })
+
   it('accepts only the exact iframe source and per-load nonce', async () => {
     const expectedSource = { postMessage: vi.fn() } as unknown as MessageEventSource
     const otherSource = { postMessage: vi.fn() } as unknown as MessageEventSource

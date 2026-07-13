@@ -14,6 +14,6 @@ createRoot(document.getElementById('root')!).render(
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js')
+    void navigator.serviceWorker.register('/sw-v2.js')
   })
 }

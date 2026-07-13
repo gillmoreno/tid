@@ -25,6 +25,21 @@ dev-docker:
 deploy-cloudflare *args:
     bash scripts/deploy-cloudflare.sh {{args}}
 
+roomworks-deploy env_file:
+    docker compose --env-file "{{env_file}}" -f docker-compose.roomworks.yml up -d --build
+
+roomworks-status env_file:
+    docker compose --env-file "{{env_file}}" -f docker-compose.roomworks.yml ps
+
+roomworks-logs env_file:
+    docker compose --env-file "{{env_file}}" -f docker-compose.roomworks.yml logs --tail=100 roomworks
+
+roomworks-down env_file:
+    docker compose --env-file "{{env_file}}" -f docker-compose.roomworks.yml down
+
+backup-roomworks db output_dir retain_days="14":
+    bash scripts/backup-roomworks-signaling.sh --db "{{db}}" --output-dir "{{output_dir}}" --retain-days "{{retain_days}}"
+
 # Clip → Post loop (semi-automated X posting prep)
 prepare-post draft:
     bash loops/clip-to-post/prepare-post.sh --draft {{draft}}

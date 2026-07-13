@@ -1,0 +1,33 @@
+name: roomworks
+
+services:
+  roomworks:
+    container_name: roomworks
+    build:
+      context: .
+      dockerfile: Dockerfile.roomworks
+      args:
+        VITE_SIGNALING_URL: /api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4510:80"
+    environment:
+      SIGNALING_ADDR: 127.0.0.1:8081
+      SIGNALING_DB_PATH: /data/roomworks-signaling.db
+      SIGNALING_ALLOWED_ORIGINS: ${SIGNALING_ALLOWED_ORIGINS:-https://rooms.the-idea-guy.com,http://localhost:5200}
+      ROOMWORKS_CREATOR_VERIFY_KEY: ${ROOMWORKS_CREATOR_VERIFY_KEY:?ROOMWORKS_CREATOR_VERIFY_KEY is required}
+    volumes:
+      - type: bind
+        source: ${ROOMWORKS_DATA_DIR:?ROOMWORKS_DATA_DIR must be an absolute path outside the repository}
+        target: /data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/api/healthz"]
+      interval: 15s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

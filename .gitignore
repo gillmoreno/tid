@@ -16,6 +16,8 @@ node_modules/
 # Build outputs
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
+meta-app/dist/
+meta-app/tsconfig.tsbuildinfo
 go-backend/server
 go-backend/factory
 

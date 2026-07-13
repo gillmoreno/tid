@@ -3,21 +3,39 @@
 Production-shaped SQLite-backed signaling and encrypted-mailbox service. The server treats every
 `envelope` as opaque ciphertext and never accepts, stores, logs, or returns a room data key.
 
-Run:
+Initialize a local Ed25519 signer, export only its public key, and run the API:
 
 ```sh
-go run . -addr :8081 -db ./signaling.db
+go run ./cmd/roomworks-token init --seed-file /tmp/roomworks-creator-signing.seed
+export ROOMWORKS_CREATOR_VERIFY_KEY="$(go run ./cmd/roomworks-token public-key \
+  --seed-file /tmp/roomworks-creator-signing.seed)"
+go run .
 ```
 
+Minting remains offline and copies the permit directly to the macOS clipboard:
+
+```sh
+go run ./cmd/roomworks-token mint --capacity 3 --ttl 24h \
+  --seed-file /tmp/roomworks-creator-signing.seed
+```
+
+The public pilot runs in the repository's dedicated unified Docker image. See
+`docs_and_changelog/2026-07-12-public-room-pilot-deployment.md`; do not add this service to the
+existing TID Compose service.
+
 `SIGNALING_ADDR`, `SIGNALING_DB_PATH`, and comma-separated
-`SIGNALING_ALLOWED_ORIGINS` are supported. The default browser origin is
-`http://localhost:5200`. Requests without an `Origin` header (native clients and tests) are allowed.
+`SIGNALING_ALLOWED_ORIGINS` are supported. `ROOMWORKS_CREATOR_VERIFY_KEY` is required and must be a
+base64url Ed25519 public key. The private seed never enters the Go service. The default bind is
+`127.0.0.1:8081` and the default browser origin is `http://localhost:5200`. Requests without an
+`Origin` header (native clients and tests) are allowed.
 
 ## Credentials and admission
 
-- `POST /v2/rooms` — `{ "maxMembers": 2 }`. Returns a public random `roomId`, an
-  `ownerCapability`, and the owner's member/device IDs and member credential. Provisioning
-  credentials are returned once and stored only as SHA-256 hashes.
+- `POST /v2/rooms` — requires a one-use `X-Room-Creator-Permit` whose signed capacity N exactly
+  matches `{ "maxMembers": N }`. Capacity includes the owner and can be 2 through 50. Returns a
+  public random `roomId`, an `ownerCapability`, and the owner's member/device IDs and member
+  credential. Provisioning credentials are returned once and stored only as SHA-256 hashes. Permit
+  consumption and room creation share one transaction; only the permit's token-ID hash is stored.
 - `GET /v2/rooms/{roomId}` — bearer member authentication. Returns capacity and durable member
   count.
 - `GET /v2/rooms/{roomId}/devices` — bearer member authentication. Returns admitted public

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -17,6 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"signaling/internal/creationpermit"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -30,14 +33,16 @@ const (
 )
 
 type serverOptions struct {
-	AllowedOrigins []string
-	Now            func() time.Time
+	AllowedOrigins   []string
+	CreatorVerifyKey string
+	Now              func() time.Time
 }
 
 type server struct {
-	db             *sql.DB
-	now            func() time.Time
-	allowedOrigins map[string]struct{}
+	db               *sql.DB
+	now              func() time.Time
+	allowedOrigins   map[string]struct{}
+	creatorVerifyKey ed25519.PublicKey
 }
 
 type member struct {
@@ -57,6 +62,10 @@ type apiError struct {
 func newServer(dbPath string, opts serverOptions) (*server, error) {
 	if dbPath == "" {
 		return nil, errors.New("database path is required")
+	}
+	creatorVerifyKey, err := creationpermit.ParsePublicKey(opts.CreatorVerifyKey)
+	if err != nil {
+		return nil, err
 	}
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -84,7 +93,12 @@ func newServer(dbPath string, opts serverOptions) (*server, error) {
 			origins[origin] = struct{}{}
 		}
 	}
-	return &server{db: db, now: now, allowedOrigins: origins}, nil
+	return &server{
+		db:               db,
+		now:              now,
+		allowedOrigins:   origins,
+		creatorVerifyKey: creatorVerifyKey,
+	}, nil
 }
 
 func migrate(db *sql.DB) error {
@@ -165,15 +179,65 @@ func migrate(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_v2_operations_delivery
 			ON v2_operations(room_id, to_device_id, operation_id);
+		CREATE TABLE IF NOT EXISTS v2_creator_permit_uses (
+			permit_id_hash TEXT PRIMARY KEY,
+			consumed_at INTEGER NOT NULL,
+			expires_at INTEGER NOT NULL,
+			room_id TEXT NOT NULL UNIQUE
+		);
 		INSERT OR IGNORE INTO signaling_schema_migrations(version, applied_at)
 			VALUES (2, unixepoch() * 1000);
 		INSERT OR IGNORE INTO signaling_schema_migrations(version, applied_at)
 			VALUES (3, unixepoch() * 1000);
+		INSERT OR IGNORE INTO signaling_schema_migrations(version, applied_at)
+			VALUES (4, unixepoch() * 1000);
 	`)
 	if err != nil {
 		return fmt.Errorf("migrate signaling database: %w", err)
 	}
+	if err := migrateCreatorPermitUses(db); err != nil {
+		return fmt.Errorf("migrate creator permit uses: %w", err)
+	}
 	return nil
+}
+
+func migrateCreatorPermitUses(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA foreign_key_list(v2_creator_permit_uses)`)
+	if err != nil {
+		return err
+	}
+	hasRoomForeignKey := rows.Next()
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if !hasRoomForeignKey {
+		_, err = db.Exec(`INSERT OR IGNORE INTO signaling_schema_migrations(version, applied_at)
+			VALUES (5, unixepoch() * 1000)`)
+		return err
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(`
+		DROP TABLE IF EXISTS v2_creator_permit_uses_v5;
+		CREATE TABLE v2_creator_permit_uses_v5 (
+			permit_id_hash TEXT PRIMARY KEY,
+			consumed_at INTEGER NOT NULL,
+			expires_at INTEGER NOT NULL,
+			room_id TEXT NOT NULL UNIQUE
+		);
+		INSERT INTO v2_creator_permit_uses_v5(permit_id_hash, consumed_at, expires_at, room_id)
+			SELECT permit_id_hash, consumed_at, expires_at, room_id FROM v2_creator_permit_uses;
+		DROP TABLE v2_creator_permit_uses;
+		ALTER TABLE v2_creator_permit_uses_v5 RENAME TO v2_creator_permit_uses;
+		INSERT OR IGNORE INTO signaling_schema_migrations(version, applied_at)
+			VALUES (5, unixepoch() * 1000);
+	`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *server) Close() error {
@@ -181,7 +245,76 @@ func (s *server) Close() error {
 }
 
 func (s *server) Handler() http.Handler {
-	return s.withCORS(http.HandlerFunc(s.route))
+	return s.withRequestLog(s.withCORS(http.HandlerFunc(s.route)))
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusRecorder) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusRecorder) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func (s *server) withRequestLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		requestID, err := randomToken(12)
+		if err != nil {
+			requestID = "unavailable"
+		}
+		w.Header().Set("X-Request-ID", requestID)
+		recorder := &statusRecorder{ResponseWriter: w}
+		next.ServeHTTP(recorder, r)
+		status := recorder.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		log.Printf("request_id=%s method=%s route=%s status=%d duration_ms=%d",
+			requestID, r.Method, routeTemplate(r.URL.Path), status, time.Since(started).Milliseconds())
+	})
+}
+
+func routeTemplate(path string) string {
+	parts := splitPath(path)
+	switch {
+	case len(parts) == 1 && parts[0] == "healthz":
+		return "/healthz"
+	case len(parts) == 2 && parts[0] == "v2" && parts[1] == "rooms":
+		return "/v2/rooms"
+	case len(parts) == 4 && parts[0] == "v2" && parts[1] == "invites" && parts[3] == "redeem":
+		return "/v2/invites/:inviteId/redeem"
+	case len(parts) == 3 && parts[0] == "v2" && parts[1] == "rooms":
+		return "/v2/rooms/:roomId"
+	case len(parts) == 4 && parts[0] == "v2" && parts[1] == "rooms" && parts[3] == "devices":
+		return "/v2/rooms/:roomId/devices"
+	case len(parts) == 4 && parts[0] == "v2" && parts[1] == "rooms" && parts[3] == "invites":
+		return "/v2/rooms/:roomId/invites"
+	case len(parts) == 5 && parts[0] == "v2" && parts[1] == "rooms" && parts[3] == "invites":
+		return "/v2/rooms/:roomId/invites/:inviteId"
+	case len(parts) == 6 && parts[0] == "v2" && parts[1] == "rooms" && parts[3] == "sessions" && parts[5] == "signals":
+		return "/v2/rooms/:roomId/sessions/:sessionId/signals"
+	case len(parts) == 5 && parts[0] == "v2" && parts[1] == "rooms" && parts[3] == "mailbox" && parts[4] == "checkpoint":
+		return "/v2/rooms/:roomId/mailbox/checkpoint"
+	case len(parts) == 6 && parts[0] == "v2" && parts[1] == "rooms" && parts[3] == "mailbox" && parts[5] == "checkpoint":
+		return "/v2/rooms/:roomId/mailbox/:deviceId/checkpoint"
+	case len(parts) == 6 && parts[0] == "v2" && parts[1] == "rooms" && parts[3] == "mailbox" && parts[5] == "operations":
+		return "/v2/rooms/:roomId/mailbox/:deviceId/operations"
+	default:
+		return "unmatched"
+	}
 }
 
 func (s *server) withCORS(next http.Handler) http.Handler {
@@ -195,7 +328,7 @@ func (s *server) withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Owner-Capability")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Owner-Capability, X-Room-Creator-Permit")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -259,6 +392,11 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) createRoom(w http.ResponseWriter, r *http.Request) {
+	providedPermit := r.Header.Get("X-Room-Creator-Permit")
+	if providedPermit == "" {
+		writeError(w, http.StatusUnauthorized, "creator_permit_required", "room creator permit is required")
+		return
+	}
 	var input struct {
 		MaxMembers int `json:"maxMembers"`
 	}
@@ -272,21 +410,52 @@ func (s *server) createRoom(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_max_members", "maxMembers must be between 2 and 50")
 		return
 	}
+	permit, err := creationpermit.Verify(providedPermit, s.creatorVerifyKey, s.now())
+	if err != nil {
+		writeCreationPermitError(w, err)
+		return
+	}
+	if permit.MaxMembers != input.MaxMembers {
+		writeError(w, http.StatusForbidden, "creator_permit_capacity_mismatch", "room capacity does not match the creator permit")
+		return
+	}
 	roomID, ownerCapability, memberID, deviceID, memberCredential, err := randomValues()
 	if err != nil {
 		s.internalError(w, err)
 		return
 	}
-	now := s.now().UnixMilli()
 	tx, err := s.db.Begin()
 	if err != nil {
 		s.internalError(w, err)
 		return
 	}
 	defer tx.Rollback()
+	transactionNow := s.now()
+	if permit.ExpiresAt <= transactionNow.Unix() {
+		writeError(w, http.StatusForbidden, "creator_permit_expired", "room creator permit has expired")
+		return
+	}
+	now := transactionNow.UnixMilli()
 	if _, err = tx.Exec(`INSERT INTO v2_rooms(room_id, owner_capability_hash, max_members, created_at) VALUES(?, ?, ?, ?)`,
 		roomID, hashSecret(ownerCapability), input.MaxMembers, now); err != nil {
 		s.internalError(w, err)
+		return
+	}
+	result, err := tx.Exec(`
+		INSERT INTO v2_creator_permit_uses(permit_id_hash, consumed_at, expires_at, room_id)
+		VALUES(?, ?, ?, ?) ON CONFLICT(permit_id_hash) DO NOTHING`,
+		hashSecret(permit.ID), now, permit.ExpiresAt*1000, roomID)
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	consumed, err := result.RowsAffected()
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	if consumed != 1 {
+		writeError(w, http.StatusConflict, "creator_permit_used", "room creator permit has already been used")
 		return
 	}
 	ownerIdentity := "owner:" + deviceID
@@ -309,6 +478,22 @@ func (s *server) createRoom(w http.ResponseWriter, r *http.Request) {
 		"ownerDeviceId":         deviceID,
 		"ownerMemberCredential": memberCredential,
 	})
+}
+
+func writeCreationPermitError(w http.ResponseWriter, err error) {
+	var validationErr *creationpermit.ValidationError
+	if !errors.As(err, &validationErr) {
+		writeError(w, http.StatusForbidden, "invalid_creator_permit", "room creator permit is invalid")
+		return
+	}
+	switch validationErr.Kind {
+	case creationpermit.Expired:
+		writeError(w, http.StatusForbidden, "creator_permit_expired", "room creator permit has expired")
+	case creationpermit.NotYetValid:
+		writeError(w, http.StatusForbidden, "creator_permit_not_yet_valid", "room creator permit is not valid yet")
+	default:
+		writeError(w, http.StatusForbidden, "invalid_creator_permit", "room creator permit is invalid")
+	}
 }
 
 func randomValues() (string, string, string, string, string, error) {

@@ -38,13 +38,17 @@ describe('signaling v2 API contract', () => {
       }, 201))
     vi.stubGlobal('fetch', fetchMock)
 
-    await roomApi.createRoom(3)
+    await roomApi.createRoom(3, 'room-creator-permit')
     await roomApi.createInvite('room-1', 'owner-capability', 86_400)
 
     expect(requestDetails(fetchMock, 0)).toEqual({
       url: `${SIGNALING_URL}/v2/rooms`,
       method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Room-Creator-Permit': 'room-creator-permit',
+      },
       body: { maxMembers: 3 },
     })
     expect(requestDetails(fetchMock, 1)).toEqual({
@@ -57,6 +61,18 @@ describe('signaling v2 API contract', () => {
       },
       body: { expiresInSeconds: 86_400 },
     })
+  })
+
+  it.each([
+    ['creator_permit_required', 401, 'room creator permit is required'],
+    ['invalid_creator_permit', 403, 'room creator permit is invalid'],
+  ])('surfaces creator gate failure %s', async (code, status, message) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      error: { code, message },
+    }, status)))
+
+    await expect(roomApi.createRoom(2, code === 'creator_permit_required' ? '' : 'wrong-permit'))
+      .rejects.toMatchObject({ status, code, message })
   })
 
   it('redeems with client retry credentials and uses bearer room reads', async () => {

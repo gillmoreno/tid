@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,13 +14,18 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"signaling/internal/creationpermit"
 )
 
 type testAPI struct {
 	t       *testing.T
 	server  *server
 	handler http.Handler
+	now     func() time.Time
 }
+
+var testCreatorSeed = bytes.Repeat([]byte{0x31}, ed25519.SeedSize)
 
 type roomFixture struct {
 	RoomID          string
@@ -43,15 +50,20 @@ type memberFixture struct {
 
 func newTestAPI(t *testing.T, now func() time.Time) *testAPI {
 	t.Helper()
+	publicKey, err := creationpermit.PublicKeyFromSeed(testCreatorSeed)
+	if err != nil {
+		t.Fatal(err)
+	}
 	s, err := newServer(filepath.Join(t.TempDir(), "signaling.db"), serverOptions{
-		AllowedOrigins: []string{"http://localhost:5200"},
-		Now:            now,
+		AllowedOrigins:   []string{"http://localhost:5200"},
+		CreatorVerifyKey: creationpermit.EncodePublicKey(publicKey),
+		Now:              now,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	return &testAPI{t: t, server: s, handler: s.Handler()}
+	return &testAPI{t: t, server: s, handler: s.Handler(), now: now}
 }
 
 func (a *testAPI) request(method, path string, body any, headers map[string]string) (int, []byte) {
@@ -89,7 +101,10 @@ func decodeMap(t *testing.T, body []byte) map[string]any {
 
 func (a *testAPI) createRoom(max int) roomFixture {
 	a.t.Helper()
-	status, body := a.request(http.MethodPost, "/v2/rooms", map[string]any{"maxMembers": max}, nil)
+	permit := a.mintPermit(max, time.Hour)
+	status, body := a.request(http.MethodPost, "/v2/rooms", map[string]any{"maxMembers": max}, map[string]string{
+		"X-Room-Creator-Permit": permit,
+	})
 	if status != http.StatusCreated {
 		a.t.Fatalf("create room: status=%d body=%s", status, body)
 	}
@@ -101,6 +116,15 @@ func (a *testAPI) createRoom(max int) roomFixture {
 		OwnerDeviceID:   out["ownerDeviceId"].(string),
 		OwnerCredential: out["ownerMemberCredential"].(string),
 	}
+}
+
+func (a *testAPI) mintPermit(max int, ttl time.Duration) string {
+	a.t.Helper()
+	token, _, err := creationpermit.Mint(testCreatorSeed, max, a.now(), ttl)
+	if err != nil {
+		a.t.Fatal(err)
+	}
+	return token
 }
 
 func (a *testAPI) issueInvite(room roomFixture, expires int64) inviteFixture {
@@ -177,6 +201,164 @@ func TestCreateRoomAuthenticationAndCORS(t *testing.T) {
 	})
 	if status != http.StatusForbidden {
 		t.Fatalf("disallowed origin status=%d", status)
+	}
+}
+
+func TestCreateRoomRequiresCreatorPermit(t *testing.T) {
+	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
+	a := newTestAPI(t, func() time.Time { return now })
+	body := map[string]any{"maxMembers": 2}
+
+	status, response := a.request(http.MethodPost, "/v2/rooms", body, nil)
+	if status != http.StatusUnauthorized || !strings.Contains(string(response), `"creator_permit_required"`) {
+		t.Fatalf("missing creator permit: status=%d body=%s", status, response)
+	}
+	status, response = a.request(http.MethodPost, "/v2/rooms", body, map[string]string{
+		"X-Room-Creator-Permit": "invalid-room-creator-permit",
+	})
+	if status != http.StatusForbidden || !strings.Contains(string(response), `"invalid_creator_permit"`) {
+		t.Fatalf("invalid creator permit: status=%d body=%s", status, response)
+	}
+	permit := a.mintPermit(2, time.Hour)
+	status, response = a.request(http.MethodPost, "/v2/rooms", body, map[string]string{
+		"X-Room-Creator-Permit": permit,
+		"Origin":                "http://localhost:5200",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("valid creator permit: status=%d body=%s", status, response)
+	}
+	status, response = a.request(http.MethodPost, "/v2/rooms", body, map[string]string{
+		"X-Room-Creator-Permit": permit,
+	})
+	if status != http.StatusConflict || !strings.Contains(string(response), `"creator_permit_used"`) {
+		t.Fatalf("used creator permit: status=%d body=%s", status, response)
+	}
+
+	mismatch := a.mintPermit(3, time.Hour)
+	status, response = a.request(http.MethodPost, "/v2/rooms", body, map[string]string{
+		"X-Room-Creator-Permit": mismatch,
+	})
+	if status != http.StatusForbidden || !strings.Contains(string(response), `"creator_permit_capacity_mismatch"`) {
+		t.Fatalf("capacity mismatch: status=%d body=%s", status, response)
+	}
+
+	expired := a.mintPermit(2, creationpermit.MinTTL)
+	now = now.Add(creationpermit.MinTTL)
+	status, response = a.request(http.MethodPost, "/v2/rooms", body, map[string]string{
+		"X-Room-Creator-Permit": expired,
+	})
+	if status != http.StatusForbidden || !strings.Contains(string(response), `"creator_permit_expired"`) {
+		t.Fatalf("expired permit: status=%d body=%s", status, response)
+	}
+
+	status, _ = a.request(http.MethodOptions, "/v2/rooms", nil, map[string]string{
+		"Origin": "http://localhost:5200",
+	})
+	if status != http.StatusNoContent {
+		t.Fatalf("preflight status=%d", status)
+	}
+}
+
+func TestServerRequiresCreatorVerifyKeyAndLogsRouteTemplates(t *testing.T) {
+	_, err := newServer(filepath.Join(t.TempDir(), "signaling.db"), serverOptions{})
+	if err == nil || !strings.Contains(err.Error(), "Ed25519 public key") {
+		t.Fatalf("verify key error=%v", err)
+	}
+
+	tests := map[string]string{
+		"/v2/invites/secret-locator/redeem":                     "/v2/invites/:inviteId/redeem",
+		"/v2/rooms/room-secret/sessions/session-secret/signals": "/v2/rooms/:roomId/sessions/:sessionId/signals",
+		"/v2/rooms/room-secret/unexpected/private-value":        "unmatched",
+	}
+	for path, expected := range tests {
+		if actual := routeTemplate(path); actual != expected {
+			t.Errorf("routeTemplate(%q)=%q want %q", path, actual, expected)
+		}
+	}
+}
+
+func TestCreatorPermitReceiptSurvivesRoomDeletionAndOldSchemaMigration(t *testing.T) {
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "old-signaling.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`
+		PRAGMA foreign_keys = ON;
+		CREATE TABLE signaling_schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL);
+		CREATE TABLE v2_rooms (room_id TEXT PRIMARY KEY);
+		CREATE TABLE v2_creator_permit_uses (
+			permit_id_hash TEXT PRIMARY KEY,
+			consumed_at INTEGER NOT NULL,
+			expires_at INTEGER NOT NULL,
+			room_id TEXT NOT NULL UNIQUE REFERENCES v2_rooms(room_id) ON DELETE CASCADE
+		);
+		INSERT INTO v2_rooms(room_id) VALUES ('room-old');
+		INSERT INTO v2_creator_permit_uses(permit_id_hash, consumed_at, expires_at, room_id)
+			VALUES ('permit-hash', 1, 2, 'room-old');
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Query(`PRAGMA foreign_key_list(v2_creator_permit_uses)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows.Next() {
+		rows.Close()
+		t.Fatal("creator permit receipt retained a room foreign key")
+	}
+	rows.Close()
+	if _, err := db.Exec(`DELETE FROM v2_rooms WHERE room_id = 'room-old'`); err != nil {
+		t.Fatal(err)
+	}
+	var permitCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM v2_creator_permit_uses WHERE permit_id_hash = 'permit-hash'`).Scan(&permitCount); err != nil {
+		t.Fatal(err)
+	}
+	if permitCount != 1 {
+		t.Fatalf("permitCount=%d want 1", permitCount)
+	}
+}
+
+func TestConcurrentCreatorPermitReplayCreatesOneRoom(t *testing.T) {
+	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
+	a := newTestAPI(t, func() time.Time { return now })
+	permit := a.mintPermit(4, time.Hour)
+	statuses := make(chan int, 2)
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			status, _ := a.request(http.MethodPost, "/v2/rooms", map[string]any{"maxMembers": 4}, map[string]string{
+				"X-Room-Creator-Permit": permit,
+			})
+			statuses <- status
+		}()
+	}
+	wg.Wait()
+	close(statuses)
+	got := make([]int, 0, 2)
+	for status := range statuses {
+		got = append(got, status)
+	}
+	sort.Ints(got)
+	want := []int{http.StatusCreated, http.StatusConflict}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("statuses=%v want=%v", got, want)
+	}
+	var roomCount, permitCount int
+	if err := a.server.db.QueryRow(`SELECT COUNT(*) FROM v2_rooms`).Scan(&roomCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.server.db.QueryRow(`SELECT COUNT(*) FROM v2_creator_permit_uses`).Scan(&permitCount); err != nil {
+		t.Fatal(err)
+	}
+	if roomCount != 1 || permitCount != 1 {
+		t.Fatalf("roomCount=%d permitCount=%d", roomCount, permitCount)
 	}
 }
 
