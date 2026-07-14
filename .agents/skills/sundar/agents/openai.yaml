@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sundar Business Lens"
+  short_description: "Assess AI scale, trust, and platform strategy"
+  default_prompt: "Use $sundar to evaluate this AI, platform, or scaling decision."

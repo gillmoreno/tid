@@ -45,7 +45,7 @@ export function SpotMomentForm({ onAnalyzed }: SpotMomentFormProps) {
       onAnalyzed(result);
       setFocusNote("");
     } catch {
-      setError("Spot analysis failed. Check URL, from/to timestamps, and that grok is available.");
+      setError("Spot analysis failed. Check the URL, timestamps, and configured LLM provider.");
     } finally {
       setLoading(false);
     }

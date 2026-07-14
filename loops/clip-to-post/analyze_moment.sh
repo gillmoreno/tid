@@ -5,6 +5,7 @@ set -euo pipefail
 # Usage: ./analyze_moment.sh --input drafts/{source}/moment-input.json --out drafts/{source}/moment-analysis.json
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../llm.sh"
 INPUT=""
 OUT=""
 
@@ -36,14 +37,17 @@ export FACTORY_WINDOW_START="$WINDOW_START"
 export FACTORY_WINDOW_END="$WINDOW_END"
 SYSTEM_PROMPT="$(python3 "$SCRIPT_DIR/build_moment_prompt.py")"
 
-if command -v grok >/dev/null 2>&1 && [[ -f "$HOME/.grok/auth.json" || -n "${XAI_API_KEY:-}" ]]; then
-  PROMPT_TEXT="${SYSTEM_PROMPT}
+PROMPT_FILE="$OUT_DIR/moment-analyze-prompt.txt"
+cat > "$PROMPT_FILE" <<EOF
+${SYSTEM_PROMPT}
 
 TRANSCRIPT (timestamped, Gil's selected range ${WINDOW_START} → ${WINDOW_END}):
-${TRANSCRIPT}"
+${TRANSCRIPT}
+EOF
 
-  grok --no-auto-update -p "$PROMPT_TEXT" --output-format plain > "$OUT_DIR/moment-analyze-raw.txt" 2>/dev/null || true
+if factory_generate "$PROMPT_FILE" "$OUT_DIR/moment-analyze-raw.txt"; then
   if [[ -s "$OUT_DIR/moment-analyze-raw.txt" ]]; then
+    : > "$OUT"
     python3 - "$OUT_DIR/moment-analyze-raw.txt" "$OUT" <<'PY'
 import json, re, sys
 raw = open(sys.argv[1]).read()
@@ -54,13 +58,13 @@ if m:
     sys.exit(0)
 sys.exit(1)
 PY
-    if [[ -f "$OUT" ]]; then
-      echo "Moment analysis via grok → $OUT"
+    if [[ -s "$OUT" ]]; then
+      echo "Moment analysis via $FACTORY_GENERATION_PROVIDER → $OUT"
       cat "$OUT"
       exit 0
     fi
   fi
 fi
 
-echo "ERROR: grok unavailable or moment analysis failed" >&2
+echo "ERROR: moment analysis failed" >&2
 exit 1

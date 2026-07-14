@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jobs Product Lens"
+  short_description: "Apply focus, craft, and product judgment"
+  default_prompt: "Use $jobs to challenge this product or strategy decision through focus and customer experience."

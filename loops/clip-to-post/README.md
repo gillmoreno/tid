@@ -128,6 +128,18 @@ Uses logged-in Chrome Default profile via Playwright. Only when you want zero ma
 brew install yt-dlp ffmpeg jq
 ```
 
+Create ignored repo-root `.env.local` (or `config.local.env` in this folder) for AI generation:
+
+```bash
+OPENAI_API_KEY=...
+FACTORY_LLM_PROVIDER=openai
+FACTORY_LLM_FALLBACK_PROVIDER=grok
+FACTORY_OPENAI_MODEL=gpt-5.6-sol
+FACTORY_OPENAI_REASONING_EFFORT=medium
+```
+
+The Factory calls OpenAI first. Grok remains the default fallback; set the fallback to `none` to disable it.
+
 ## Git rules
 
 - **Tracked:** scripts, `taste.md`, `README.md`, `config.example.env`
@@ -139,7 +151,7 @@ brew install yt-dlp ffmpeg jq
 - [x] Phase 1: Core scripts (`clip`, `transcript`, `draft-copy`, `draft`)
 - [x] Semi-automated prepare flow (`prepare-post.sh`)
 - [x] Post Factory: SQLite + Go API + `/factory` UI + `run-factory.sh` + `just factory`
-- [ ] Phase 2: LLM-assisted copy via `taste.md` prompt in `draft-copy.sh`
+- [x] Phase 2: OpenAI-assisted candidate copy and rewrites with Grok fallback
 - [ ] Phase 4: X API posting (`post.sh`, approve-gated)
 - [ ] Phase 5: Cron / launchd for `factory-tick`
 

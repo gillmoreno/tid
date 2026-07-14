@@ -1,0 +1,4 @@
+interface:
+  display_name: "Satya Business Lens"
+  short_description: "Assess platforms, culture, and partnerships"
+  default_prompt: "Use $satya to evaluate this platform, transformation, or organization decision."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hormozi Business Lens"
+  short_description: "Test offers, economics, and constraints"
+  default_prompt: "Use $hormozi to evaluate this offer, pricing, or growth decision."

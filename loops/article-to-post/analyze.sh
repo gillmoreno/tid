@@ -2,11 +2,12 @@
 set -euo pipefail
 
 # analyze.sh — biases + prompt + article text → analysis.json (post candidates)
-# Uses grok headless when available; otherwise a heuristic fallback for dev.
+# Uses OpenAI first, then the configured fallback, then a heuristic dev fallback.
 #
 # Usage: ./analyze.sh --input drafts/{source}/analyze-input.json --out drafts/{source}/analysis.json
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../llm.sh"
 INPUT=""
 OUT=""
 
@@ -36,16 +37,19 @@ export FACTORY_MENTIONS="$MENTIONS"
 export FACTORY_PUBLICATION="$PUBLICATION"
 SYSTEM_PROMPT="$(python3 "$SCRIPT_DIR/build_system_prompt.py")"
 
-if command -v grok >/dev/null 2>&1 && [[ -f "$HOME/.grok/auth.json" || -n "${XAI_API_KEY:-}" ]]; then
-  # Cap the article length so we do not blow the prompt budget.
-  TRIMMED_ARTICLE="$(printf '%s' "$ARTICLE" | head -c 24000)"
-  PROMPT_TEXT="${SYSTEM_PROMPT}
+# Cap the article length so we do not blow the prompt budget.
+TRIMMED_ARTICLE="${ARTICLE:0:24000}"
+PROMPT_FILE="$OUT_DIR/analyze-prompt.txt"
+cat > "$PROMPT_FILE" <<EOF
+${SYSTEM_PROMPT}
 
 ARTICLE:
-${TRIMMED_ARTICLE}"
+${TRIMMED_ARTICLE}
+EOF
 
-  grok --no-auto-update -p "$PROMPT_TEXT" --output-format plain > "$OUT_DIR/analyze-raw.txt" 2>/dev/null || true
+if factory_generate "$PROMPT_FILE" "$OUT_DIR/analyze-raw.txt"; then
   if [[ -s "$OUT_DIR/analyze-raw.txt" ]]; then
+    : > "$OUT"
     python3 - "$OUT_DIR/analyze-raw.txt" "$OUT" <<'PY'
 import json, re, sys
 raw = open(sys.argv[1]).read()
@@ -57,8 +61,8 @@ if m:
         sys.exit(0)
 sys.exit(1)
 PY
-    if [[ -f "$OUT" ]]; then
-      echo "Article analysis via grok → $OUT"
+    if [[ -s "$OUT" ]]; then
+      echo "Article analysis via $FACTORY_GENERATION_PROVIDER → $OUT"
       cat "$OUT"
       exit 0
     fi
@@ -83,7 +87,7 @@ data = {
     "candidates": [
         {
             "post_text": post,
-            "why_interesting": "Dev fallback candidate (grok unavailable) — edit or re-analyze with grok configured.",
+            "why_interesting": "Dev fallback candidate (LLM unavailable) — edit or re-analyze with a provider configured.",
             "confidence": 0.2,
         }
     ],

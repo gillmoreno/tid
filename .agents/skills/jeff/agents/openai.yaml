@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bezos Business Lens"
+  short_description: "Apply customer and decision-velocity frameworks"
+  default_prompt: "Use $jeff to evaluate this business decision with documented Amazon-era frameworks."

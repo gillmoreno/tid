@@ -1,0 +1,4 @@
+interface:
+  display_name: "Humanize AI Text"
+  short_description: "Remove AI cadence without changing facts"
+  default_prompt: "Use $humanize-ai-text to rewrite this draft as natural human prose without inventing details."

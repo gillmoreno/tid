@@ -1,4 +1,4 @@
-# TID — Grok Build / Agent Instructions
+# TID — Agent Instructions
 
 **Repo:** The Idea Guy (`tid`) — Go API + React + SQLite + composable loops.
 
@@ -10,6 +10,8 @@
 - Sources dictionary (podcasts / news feeds / companies / people): http://localhost:5180/factory/sources
 
 Article Factory loop: `loops/article-to-post/` (needs `pip3 install -r loops/article-to-post/requirements.txt` for trafilatura).
+
+Factory writing uses the OpenAI Responses API by default with `gpt-5.6-sol` and medium reasoning. Set `OPENAI_API_KEY` in ignored `.env.local`; Grok is the default fallback.
 
 ## Primary loop: Post Factory
 

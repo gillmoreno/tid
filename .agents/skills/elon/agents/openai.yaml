@@ -1,0 +1,4 @@
+interface:
+  display_name: "Elon Business Lens"
+  short_description: "Apply first-principles engineering judgment"
+  default_prompt: "Use $elon to assess this business decision through documented first-principles frameworks."

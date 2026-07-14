@@ -1,4 +1,4 @@
-# Post Factory Loop — Agent Instructions (Grok Build)
+# Post Factory Loop — Agent Instructions
 
 **You are in the right folder:** `tid/loops/clip-to-post/` inside The Idea Guy monorepo.
 
@@ -49,6 +49,13 @@ just factory-tick
 | `biases.default.md` | Seed for Gil's lens (curiosity + skepticism) |
 | `prompt.default.md` | Seed for “find 2–5 moments” instruction |
 | `humanize-instructions.md` | Distilled rules from the humanize-ai-text skill. Used by rewrite when "Humanize" is chosen in the UI or instruction contains humanize/de-ai. |
+| `../llm.sh` | Shared OpenAI-first provider adapter; defaults to GPT-5.6 Sol with medium reasoning and falls back to Grok. |
+| `transcript.sh` | YouTube → transcript |
+| `analyze.sh` | Transcript + biases + prompt → JSON candidates |
+| `clip.sh` | Timestamp range → `clip.mp4` |
+| `prepare-post.sh` | Mechanical post prep only |
+| `meta.json` | Per-candidate source of truth for posting |
+| `data/factory/tid.db` | Sources, candidates, schedule |
 
 **Humanizing post text (removing AI smell)**
 
@@ -57,15 +64,23 @@ The UI "Humanize" button (and any rewrite instruction containing "humanize", "de
 - Forces varied sentence length and natural texture.
 - Never invents facts to fake humanity.
 
-You can also paste any post_text here and run `/humanize-ai-text` (the full skill) for an even deeper edit, then paste the result back into the factory card.
+You can also paste any post_text here and run `$humanize-ai-text` (the full skill) for an even deeper edit, then paste the result back into the factory card.
 
 To strengthen at generation time, the analyzer prompt now explicitly asks for "natural human prose".
-| `transcript.sh` | YouTube → transcript |
-| `analyze.sh` | Transcript + biases + prompt → JSON candidates |
-| `clip.sh` | Timestamp range → `clip.mp4` |
-| `prepare-post.sh` | Mechanical post prep only |
-| `meta.json` | Per-candidate source of truth for posting |
-| `data/factory/tid.db` | Sources, candidates, schedule |
+
+**LLM configuration**
+
+Put secrets in ignored repo-root `.env.local` or `config.local.env`:
+
+```bash
+OPENAI_API_KEY=...
+FACTORY_LLM_PROVIDER=openai
+FACTORY_LLM_FALLBACK_PROVIDER=grok
+FACTORY_OPENAI_MODEL=gpt-5.6-sol
+FACTORY_OPENAI_REASONING_EFFORT=medium
+```
+
+Set `FACTORY_LLM_FALLBACK_PROVIDER=none` to fail instead of falling back to Grok.
 
 Never commit `drafts/`, `data/`, `.env`, or `*.mp4`.
 

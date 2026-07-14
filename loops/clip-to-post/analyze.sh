@@ -2,11 +2,12 @@
 set -euo pipefail
 
 # analyze.sh — biases + prompt + transcript → analysis.json
-# Uses grok headless when available; otherwise heuristic fallback for dev.
+# Uses OpenAI first, then the configured fallback, then a heuristic dev fallback.
 #
 # Usage: ./analyze.sh --input drafts/{source}/analyze-input.json --out drafts/{source}/analysis.json
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../llm.sh"
 INPUT=""
 OUT=""
 
@@ -34,15 +35,18 @@ export FACTORY_PROMPT="$PROMPT"
 export FACTORY_MENTIONS="$MENTIONS"
 SYSTEM_PROMPT="$(python3 "$SCRIPT_DIR/build_system_prompt.py")"
 
-if command -v grok >/dev/null 2>&1 && [[ -f "$HOME/.grok/auth.json" || -n "${XAI_API_KEY:-}" ]]; then
-  PREPARED_TRANSCRIPT="$(printf '%s' "$TRANSCRIPT" | python3 "$SCRIPT_DIR/prepare_analyze_transcript.py")"
-  PROMPT_TEXT="${SYSTEM_PROMPT}
+PREPARED_TRANSCRIPT="$(printf '%s' "$TRANSCRIPT" | python3 "$SCRIPT_DIR/prepare_analyze_transcript.py")"
+PROMPT_FILE="$OUT_DIR/analyze-prompt.txt"
+cat > "$PROMPT_FILE" <<EOF
+${SYSTEM_PROMPT}
 
 TRANSCRIPT (timestamped, sampled across full episode when long):
-${PREPARED_TRANSCRIPT}"
+${PREPARED_TRANSCRIPT}
+EOF
 
-  grok --no-auto-update -p "$PROMPT_TEXT" --output-format plain > "$OUT_DIR/analyze-raw.txt" 2>/dev/null || true
+if factory_generate "$PROMPT_FILE" "$OUT_DIR/analyze-raw.txt"; then
   if [[ -s "$OUT_DIR/analyze-raw.txt" ]]; then
+    : > "$OUT"
     python3 - "$OUT_DIR/analyze-raw.txt" "$OUT" <<'PY'
 import json, re, sys
 raw = open(sys.argv[1]).read()
@@ -53,8 +57,8 @@ if m:
     sys.exit(0)
 sys.exit(1)
 PY
-    if [[ -f "$OUT" ]]; then
-      echo "Analysis via grok → $OUT"
+    if [[ -s "$OUT" ]]; then
+      echo "Analysis via $FACTORY_GENERATION_PROVIDER → $OUT"
       cat "$OUT"
       exit 0
     fi

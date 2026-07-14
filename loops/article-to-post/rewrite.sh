@@ -5,6 +5,8 @@ set -euo pipefail
 #
 # Usage: ./rewrite.sh --input rewrite-input.json --out rewrite-output.json
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../llm.sh"
 INPUT=""
 OUT=""
 
@@ -55,11 +57,10 @@ Return ONLY valid JSON (no markdown fences):
 {{"post_text": "..."}}"""
 open(sys.argv[2], "w", encoding="utf-8").write(prompt)
 PY
-PROMPT_TEXT="$(<"$PROMPT_FILE")"
 
-if command -v grok >/dev/null 2>&1 && [[ -f "$HOME/.grok/auth.json" || -n "${XAI_API_KEY:-}" ]]; then
-  grok --no-auto-update -p "$PROMPT_TEXT" --output-format plain > "$OUT_DIR/rewrite-raw.txt" 2>/dev/null || true
+if factory_generate "$PROMPT_FILE" "$OUT_DIR/rewrite-raw.txt"; then
   if [[ -s "$OUT_DIR/rewrite-raw.txt" ]]; then
+    : > "$OUT"
     python3 - "$OUT_DIR/rewrite-raw.txt" "$OUT" <<'PY'
 import json, re, sys
 raw = open(sys.argv[1]).read()
@@ -72,13 +73,13 @@ if m:
     sys.exit(0)
 sys.exit(1)
 PY
-    if [[ -f "$OUT" ]]; then
-      echo "Rewrite via grok → $OUT"
+    if [[ -s "$OUT" ]]; then
+      echo "Rewrite via $FACTORY_GENERATION_PROVIDER → $OUT"
       cat "$OUT"
       exit 0
     fi
   fi
 fi
 
-echo "ERROR: grok unavailable or rewrite failed" >&2
+echo "ERROR: rewrite failed" >&2
 exit 1

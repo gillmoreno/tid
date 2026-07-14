@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jensen Business Lens"
+  short_description: "Assess platform bets, speed, and organization"
+  default_prompt: "Use $jensen to assess this strategy, technology bet, or organization design."

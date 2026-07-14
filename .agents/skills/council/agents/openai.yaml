@@ -1,0 +1,4 @@
+interface:
+  display_name: "Entrepreneur Council"
+  short_description: "Compare advice from selected business leaders"
+  default_prompt: "Use $council to compare the most relevant business perspectives on this decision."

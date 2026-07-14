@@ -37,10 +37,12 @@ urllib + tag-stripping extractor (lower quality).
 |--------|------|
 | `fetch-article.sh` | URL → `drafts/{id}/article.txt` + `article.json` (`{title,text}`) |
 | `extract_article.py` | trafilatura extraction (with fallback) |
-| `analyze.sh` | article + biases + prompt + mentions → `analysis.json` (grok, dev fallback) |
+| `analyze.sh` | article + biases + prompt + mentions → `analysis.json` (OpenAI, Grok fallback, dev fallback) |
 | `build_system_prompt.py` | Assembles the analyzer system prompt |
 | `rewrite.sh` | Apply Gil's lens + an instruction to one post |
 | `prepare-post.sh` | Copy post text to clipboard + open X compose in Chrome |
 | `prompt.default.md` | Seed analysis instruction |
 
 Never commit `drafts/` (gitignored).
+
+Generation shares the Clip Factory LLM configuration. The default is `gpt-5.6-sol` with medium reasoning through the OpenAI Responses API; see `../clip-to-post/config.example.env`.

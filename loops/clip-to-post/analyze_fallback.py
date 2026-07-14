@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write a dev-fallback analysis.json when grok is unavailable."""
+"""Write a dev-fallback analysis.json when no LLM provider is available."""
 
 import json
 import sys
@@ -12,8 +12,8 @@ def main() -> None:
             {
                 "start_time": "00:01:00",
                 "end_time": "00:01:45",
-                "post_text": f"{snippet}\n\nPlaceholder — re-run with grok login for real analysis, or edit in the Post Factory UI.\n\n@theallinpod",
-                "why_interesting": "Dev fallback candidate (grok unavailable)",
+                "post_text": f"{snippet}\n\nPlaceholder — re-run with an LLM provider configured, or edit in the Post Factory UI.\n\n@theallinpod",
+                "why_interesting": "Dev fallback candidate (LLM unavailable)",
                 "confidence": 0.3,
             }
         ]
