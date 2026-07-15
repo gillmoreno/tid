@@ -114,7 +114,7 @@ func AttributionFooter(podcast string, dict MentionDictionary) string {
 	return "Source: " + podcast
 }
 
-func stripAttributionTail(postText string) string {
+func stripAttributionTail(postText, expectedFooter string) string {
 	postText = strings.TrimSpace(postText)
 	for {
 		changed := false
@@ -129,7 +129,7 @@ func stripAttributionTail(postText string) string {
 		if len(lines) > 0 {
 			last := strings.TrimSpace(lines[len(lines)-1])
 			lower := strings.ToLower(last)
-			if strings.HasPrefix(last, "@") ||
+			if last == expectedFooter ||
 				strings.Contains(lower, "youtube.com") ||
 				strings.Contains(lower, "youtu.be") {
 				postText = strings.TrimSpace(strings.Join(lines[:len(lines)-1], "\n"))
@@ -157,8 +157,8 @@ func ArticleAttributionFooter(publication string, dict MentionDictionary) string
 
 // EnsureArticlePostAttribution appends the publication @ tag to article posts.
 func EnsureArticlePostAttribution(postText, publication string, dict MentionDictionary) string {
-	postText = stripAttributionTail(strings.TrimSpace(postText))
 	footer := ArticleAttributionFooter(publication, dict)
+	postText = stripAttributionTail(strings.TrimSpace(postText), footer)
 	if postText == "" {
 		return footer
 	}
@@ -176,9 +176,8 @@ func EnsurePostTextAttribution(postText, podcast string, dict MentionDictionary)
 			podcast = existing
 		}
 	}
-	postText = stripAttributionTail(raw)
-
 	footer := AttributionFooter(podcast, dict)
+	postText = stripAttributionTail(raw, footer)
 	if postText == "" {
 		return footer
 	}
